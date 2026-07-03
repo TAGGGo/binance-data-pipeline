@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.DS_Store
+# Optional: ignore output data folders if created
+data/
