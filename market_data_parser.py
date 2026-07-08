@@ -508,10 +508,29 @@ class BinanceMarketDataParser:
             end_ms = int((date_obj + timedelta(days=1) - timedelta(milliseconds=1)).value / 10**6)
 
             live_api_failed = False
+            used_live_api = False
 
             for d_type in self.data_types:
-                if is_today_or_later:
+                df_part = None
+
+                # 1. Try archive first if it is a past day
+                if not is_today_or_later:
+                    df_part = self._get_parsed_df(d_type, date_str)
+
+                    if df_part is not None and not df_part.empty:
+                        # For archive metrics, attach previous day's tail
+                        if d_type == "metrics":
+                            prev_date_str = (date_obj - timedelta(days=1)).strftime("%Y-%m-%d")
+                            df_prev = self._get_parsed_df(d_type, prev_date_str)
+                            dfs_to_combine = [d for d in [df_prev, df_part] if d is not None and not d.empty]
+                            if dfs_to_combine:
+                                df_part = pd.concat(dfs_to_combine, ignore_index=True)
+
+                # 2. If it is today, or archive failed, try live API
+                if df_part is None or df_part.empty:
+                    used_live_api = True
                     try:
+                        logger.info(f"Archive not available or today. Fetching live data for {d_type} on {date_str}...")
                         if d_type == "metrics":
                             # Subtract 5 minutes to get the boundary snapshot
                             df_part = self._fetch_live_metrics(start_ms - 300000, end_ms)
@@ -521,16 +540,6 @@ class BinanceMarketDataParser:
                         logger.warning(f"Error fetching live data for {d_type} on {date_str}: {e}")
                         live_api_failed = True
                         break
-                else:
-                    df_part = self._get_parsed_df(d_type, date_str)
-
-                    # For metrics, attach previous day's tail to ensure exact snapshot matching at 00:00:00
-                    if d_type == "metrics":
-                        prev_date_str = (date_obj - timedelta(days=1)).strftime("%Y-%m-%d")
-                        df_prev = self._get_parsed_df(d_type, prev_date_str)
-                        dfs_to_combine = [d for d in [df_prev, df_part] if d is not None and not d.empty]
-                        if dfs_to_combine:
-                            df_part = pd.concat(dfs_to_combine, ignore_index=True)
 
                 if df_part is not None and not df_part.empty:
                     day_grid = pd.merge_asof(
@@ -541,17 +550,16 @@ class BinanceMarketDataParser:
                         tolerance=pd.Timedelta(self.freq)
                     )
 
-            if is_today_or_later and live_api_failed:
-                logger.warning(f"Skipping live data merge for {date_str} due to API failures. (Likely geo-restriction, try VPN)")
+            if used_live_api and live_api_failed:
+                logger.warning(f"Skipping merge for {date_str} due to live API failures. (VPN required if geo-restricted)")
                 continue
 
             # Robust non-destructive re-entry: preserve existing non-null data, fill only missing
             if main_df.empty:
                 main_df = day_grid
             else:
-                # For today's data, we overwrite existing rows to get the latest updates
-                if is_today_or_later:
-                    main_df = main_df[main_df['timestamp'].dt.normalize() != date_obj]
+                # Always drop the rows for the day we processed to ensure we overwrite with fresh data
+                main_df = main_df[main_df['timestamp'].dt.normalize() != date_obj]
 
                 main_indexed = main_df.set_index('timestamp')
                 day_indexed = day_grid.set_index('timestamp')

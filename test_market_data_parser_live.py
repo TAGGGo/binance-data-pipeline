@@ -196,5 +196,51 @@ class TestLiveFetchingAndBlending(unittest.TestCase):
         self.assertEqual(df_result.loc[0, "spot_open"], 100.0)
         self.assertNotEqual(df_result.loc[0, "spot_open"], 999.0)
 
+    @patch('market_data_parser.pd.Timestamp.utcnow')
+    @patch('market_data_parser.requests.Session.get')
+    def test_past_day_archive_missing_live_fallback(self, mock_get, mock_utcnow):
+        # Set today to tomorrow so that the test date (today_str) is considered "yesterday" (past day)
+        tomorrow_str = (self.today_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+        mock_utcnow.return_value = pd.Timestamp(tomorrow_str + " 12:00:00", tz='UTC')
+
+        # We configure the parser to run for self.today_str (which is now "yesterday")
+        parser_past = BinanceMarketDataParser(
+            "ZECUSDT", 
+            interval="1h", 
+            start_date=self.today_str, 
+            end_date=self.today_str, 
+            output_dir=self.test_dir
+        )
+
+        # Setup mock:
+        # - Archive URLs (containing 'data.binance.vision') return 404
+        # - Live API URLs return 200 with data
+        ts0 = int(self.today_dt.value / 10**6)
+        kline_data = [self.get_mock_kline(ts0, 200.0, 201.0)]
+
+        def side_effect(url, *args, **kwargs):
+            mock_resp = MagicMock()
+            if "data.binance.vision" in url:
+                mock_resp.status_code = 404
+            else:
+                mock_resp.status_code = 200
+                if "klines" in url:
+                    mock_resp.json.return_value = kline_data
+                else:
+                    mock_resp.json.return_value = [] # Empty for metrics to simplify
+            return mock_resp
+            
+        mock_get.side_effect = side_effect
+
+        # Run parser
+        df, stats = parser_past.run()
+
+        # Should successfully fallback and merge
+        self.assertEqual(stats["days_fetched_and_merged"], 1)
+        self.assertFalse(df.empty)
+        
+        df_result = pd.read_csv(parser_past.file_path)
+        self.assertEqual(df_result.loc[0, "spot_open"], 200.0)
+
 if __name__ == "__main__":
     unittest.main()
