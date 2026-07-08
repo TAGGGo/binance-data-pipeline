@@ -316,12 +316,16 @@ class BinanceMarketDataParser:
             raise ValueError(f"Unknown kline data type: {data_type}")
 
         params = {
-            "symbol": target_sym,
             "interval": inv,
             "startTime": start_time_ms,
             "endTime": end_time_ms,
             "limit": 1500
         }
+
+        if data_type == "index_price":
+            params["pair"] = target_sym
+        else:
+            params["symbol"] = target_sym
 
         try:
             data = self._fetch_live_data(url, params)
