@@ -243,15 +243,27 @@ class BinanceMarketDataParser:
         if len(day_data) < max(1, self.periods_per_day - 2):
             return False
 
-        # Verify open interest metrics are present and populated
-        has_oi = 'sum_open_interest' in day_data.columns and not day_data['sum_open_interest'].isnull().all()
-        if has_oi and ('count_toptrader_long_short_ratio' not in day_data.columns or day_data['count_toptrader_long_short_ratio'].isnull().all()):
-            return False
+        # Map data types to representative columns to verify they are populated
+        rep_cols = {
+            "spot_klines": "spot_open",
+            "futures_klines": "futures_open",
+            "metrics": "sum_open_interest",
+            "premium_index": "funding_rate",
+            "mark_price": "mark_price_open",
+            "index_price": "index_price_open"
+        }
 
-        has_funding = 'funding_rate' in day_data.columns and not day_data['funding_rate'].isnull().all()
-        if has_oi or has_funding:
-            return True
-        return False
+        for d_type in self.data_types:
+            col = rep_cols.get(d_type)
+            if col:
+                if col not in day_data.columns:
+                    return False
+                # Ensure the column is not mostly null.
+                # Allow same tolerance as row count (at most 2 nulls)
+                non_null_count = day_data[col].notnull().sum()
+                if non_null_count < max(1, self.periods_per_day - 2):
+                    return False
+        return True
 
     def _sort_and_order_columns(self, df):
         """Enforces standard column sorting prioritizing core trading schema."""

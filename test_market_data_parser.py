@@ -74,8 +74,12 @@ class TestBinanceMarketDataParser(unittest.TestCase):
         # Complete rows
         df_complete = pd.DataFrame({
             "timestamp": pd.date_range("2026-06-24", periods=48, freq="30min"),
+            "spot_open": [100.0] * 48,
+            "futures_open": [100.0] * 48,
             "sum_open_interest": [100.0] * 48,
-            "count_toptrader_long_short_ratio": [0.75] * 48
+            "funding_rate": [0.0001] * 48,
+            "mark_price_open": [100.0] * 48,
+            "index_price_open": [100.0] * 48
         })
         self.assertTrue(self.parser._is_day_complete(df_complete, pd.to_datetime("2026-06-24")))
 
