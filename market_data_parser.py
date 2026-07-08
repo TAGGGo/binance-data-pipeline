@@ -63,7 +63,7 @@ class BinanceMarketDataParser:
         self.file_path = os.path.join(self.output_dir, self.filename)
 
         self.start_date = pd.to_datetime(start_date).normalize()
-        self.end_date = pd.to_datetime(end_date or datetime.now()).normalize()
+        self.end_date = pd.to_datetime(end_date or pd.Timestamp.utcnow().tz_localize(None)).normalize()
         self.base_url = "https://data.binance.vision/data"
 
         self.data_types = data_types or [
