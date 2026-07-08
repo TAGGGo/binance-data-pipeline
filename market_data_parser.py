@@ -583,6 +583,9 @@ class BinanceMarketDataParser:
 
             stats["days_fetched_and_merged"] += 1
             main_df = self._sort_and_order_columns(main_df)
+            # Trim future rows to keep the CSV clean
+            now_utc = pd.Timestamp.utcnow().tz_localize(None)
+            main_df = main_df[main_df['timestamp'] <= now_utc]
             main_df.to_csv(self.file_path, index=False)
 
         logger.info(f"Pipeline completed for {self.filename}. Stats: {stats}")
