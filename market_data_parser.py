@@ -546,13 +546,24 @@ class BinanceMarketDataParser:
                         break
 
                 if df_part is not None and not df_part.empty:
-                    day_grid = pd.merge_asof(
-                        day_grid.sort_values('timestamp'),
-                        df_part.sort_values('timestamp'),
-                        on='timestamp',
-                        direction='nearest',
-                        tolerance=pd.Timedelta(self.freq)
-                    )
+                    if d_type == "metrics":
+                        freq_delta = pd.Timedelta(self.freq)
+                        tolerance = min(freq_delta / 2, pd.Timedelta('15min'))
+                        tolerance = max(tolerance, pd.Timedelta('1min'))
+                        day_grid = pd.merge_asof(
+                            day_grid.sort_values('timestamp'),
+                            df_part.sort_values('timestamp'),
+                            on='timestamp',
+                            direction='nearest',
+                            tolerance=tolerance
+                        )
+                    else:
+                        day_grid = pd.merge(
+                            day_grid,
+                            df_part.sort_values('timestamp'),
+                            on='timestamp',
+                            how='left'
+                        )
 
             if used_live_api and live_api_failed:
                 logger.warning(f"Skipping merge for {date_str} due to live API failures. (VPN required if geo-restricted)")
