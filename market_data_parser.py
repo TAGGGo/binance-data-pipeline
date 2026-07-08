@@ -260,6 +260,199 @@ class BinanceMarketDataParser:
         df = df[ordered_cols + other_cols]
         return df.sort_values('timestamp').reset_index(drop=True)
 
+    def _interval_to_stats_period(self, interval):
+        """Maps kline interval to Binance stats period."""
+        if interval == '1m':
+            return '5m'
+        return interval
+
+    def _fetch_live_data(self, url, params):
+        """Helper to fetch live data from Binance API."""
+        try:
+            r = self.session.get(url, params=params, timeout=15)
+            if r.status_code == 200:
+                return r.json()
+            else:
+                logger.warning(f"Binance API returned status {r.status_code} for {url}: {r.text}")
+                r.raise_for_status()
+        except Exception as e:
+            logger.debug(f"Error fetching live data from {url}: {e}")
+            raise e
+
+    def _fetch_live_klines(self, data_type, start_time_ms, end_time_ms):
+        """Fetches klines from live API for T-0."""
+        sym = self.symbol
+        fsym = self.future_symbol
+        inv = self.interval
+
+        if data_type == "spot_klines":
+            url = "https://api.binance.com/api/v3/klines"
+            target_sym = sym
+        elif data_type == "futures_klines":
+            url = "https://fapi.binance.com/fapi/v1/klines"
+            target_sym = fsym
+        elif data_type == "premium_index":
+            url = "https://fapi.binance.com/fapi/v1/premiumIndexKlines"
+            target_sym = fsym
+        elif data_type == "mark_price":
+            url = "https://fapi.binance.com/fapi/v1/markPriceKlines"
+            target_sym = fsym
+        elif data_type == "index_price":
+            url = "https://fapi.binance.com/fapi/v1/indexPriceKlines"
+            target_sym = fsym
+        else:
+            raise ValueError(f"Unknown kline data type: {data_type}")
+
+        params = {
+            "symbol": target_sym,
+            "interval": inv,
+            "startTime": start_time_ms,
+            "endTime": end_time_ms,
+            "limit": 1500
+        }
+
+        try:
+            data = self._fetch_live_data(url, params)
+            if not data:
+                return None
+
+            df = pd.DataFrame(data)
+            if df.empty:
+                return None
+
+            ts_series = pd.to_numeric(df.iloc[:, 0], errors='coerce')
+            df['timestamp'] = pd.to_datetime(ts_series, unit='ms')
+
+            if data_type == "spot_klines":
+                return pd.DataFrame({
+                    'timestamp': df['timestamp'],
+                    'spot_open': pd.to_numeric(df.iloc[:, 1], errors='coerce'),
+                    'spot_high': pd.to_numeric(df.iloc[:, 2], errors='coerce'),
+                    'spot_low': pd.to_numeric(df.iloc[:, 3], errors='coerce'),
+                    'spot_close': pd.to_numeric(df.iloc[:, 4], errors='coerce'),
+                    'spot_volume': pd.to_numeric(df.iloc[:, 5], errors='coerce'),
+                    'spot_quote_volume': pd.to_numeric(df.iloc[:, 7], errors='coerce'),
+                    'spot_trades': pd.to_numeric(df.iloc[:, 8], errors='coerce'),
+                    'spot_taker_buy_volume': pd.to_numeric(df.iloc[:, 9], errors='coerce'),
+                    'spot_taker_buy_quote_volume': pd.to_numeric(df.iloc[:, 10], errors='coerce')
+                })
+            elif data_type == "futures_klines":
+                return pd.DataFrame({
+                    'timestamp': df['timestamp'],
+                    'futures_open': pd.to_numeric(df.iloc[:, 1], errors='coerce'),
+                    'futures_high': pd.to_numeric(df.iloc[:, 2], errors='coerce'),
+                    'futures_low': pd.to_numeric(df.iloc[:, 3], errors='coerce'),
+                    'futures_close': pd.to_numeric(df.iloc[:, 4], errors='coerce'),
+                    'futures_volume': pd.to_numeric(df.iloc[:, 5], errors='coerce'),
+                    'futures_quote_volume': pd.to_numeric(df.iloc[:, 7], errors='coerce'),
+                    'futures_trades': pd.to_numeric(df.iloc[:, 8], errors='coerce'),
+                    'futures_taker_buy_volume': pd.to_numeric(df.iloc[:, 9], errors='coerce'),
+                    'futures_taker_buy_quote_volume': pd.to_numeric(df.iloc[:, 10], errors='coerce')
+                })
+            elif data_type == "premium_index":
+                return pd.DataFrame({
+                    'timestamp': df['timestamp'],
+                    'premium_index_open': pd.to_numeric(df.iloc[:, 1], errors='coerce'),
+                    'premium_index_high': pd.to_numeric(df.iloc[:, 2], errors='coerce'),
+                    'premium_index_low': pd.to_numeric(df.iloc[:, 3], errors='coerce'),
+                    'funding_rate': pd.to_numeric(df.iloc[:, 4], errors='coerce')
+                })
+            elif data_type == "mark_price":
+                return pd.DataFrame({
+                    'timestamp': df['timestamp'],
+                    'mark_price_open': pd.to_numeric(df.iloc[:, 1], errors='coerce'),
+                    'mark_price_high': pd.to_numeric(df.iloc[:, 2], errors='coerce'),
+                    'mark_price_low': pd.to_numeric(df.iloc[:, 3], errors='coerce'),
+                    'mark_price_close': pd.to_numeric(df.iloc[:, 4], errors='coerce')
+                })
+            elif data_type == "index_price":
+                return pd.DataFrame({
+                    'timestamp': df['timestamp'],
+                    'index_price_open': pd.to_numeric(df.iloc[:, 1], errors='coerce'),
+                    'index_price_high': pd.to_numeric(df.iloc[:, 2], errors='coerce'),
+                    'index_price_low': pd.to_numeric(df.iloc[:, 3], errors='coerce'),
+                    'index_price_close': pd.to_numeric(df.iloc[:, 4], errors='coerce')
+                })
+        except Exception as e:
+            logger.warning(f"Failed to fetch live klines for {data_type}: {e}")
+            raise e
+
+    def _fetch_live_metrics(self, start_time_ms, end_time_ms):
+        """Fetches and merges metrics from multiple live endpoints for T-0."""
+        fsym = self.future_symbol
+        period = self._interval_to_stats_period(self.interval)
+
+        params = {
+            "symbol": fsym,
+            "period": period,
+            "startTime": start_time_ms,
+            "endTime": end_time_ms,
+            "limit": 500
+        }
+
+        endpoints = {
+            "open_interest": ("https://fapi.binance.com/futures/data/openInterestHist", ["sumOpenInterest", "sumOpenInterestValue"]),
+            "top_trader_acc": ("https://fapi.binance.com/futures/data/topLongShortAccountRatio", ["longShortRatio"]),
+            "top_trader_pos": ("https://fapi.binance.com/futures/data/topLongShortPositionRatio", ["longShortRatio"]),
+            "global_acc": ("https://fapi.binance.com/futures/data/globalLongShortAccountRatio", ["longShortRatio"]),
+            "taker_ratio": ("https://fapi.binance.com/futures/data/takerlongshortRatio", ["buySellRatio"])
+        }
+
+        dfs = []
+        try:
+            for name, (url, fields) in endpoints.items():
+                data = self._fetch_live_data(url, params)
+                if not data:
+                    continue
+                df = pd.DataFrame(data)
+                if df.empty:
+                    continue
+
+                ts_series = pd.to_numeric(df['timestamp'], errors='coerce')
+                df['timestamp'] = pd.to_datetime(ts_series, unit='ms')
+
+                keep_cols = ['timestamp'] + fields
+                df = df[keep_cols]
+
+                rename_map = {}
+                if name == "open_interest":
+                    rename_map = {
+                        "sumOpenInterest": "sum_open_interest",
+                        "sumOpenInterestValue": "sum_open_interest_value"
+                    }
+                elif name == "top_trader_acc":
+                    rename_map = {"longShortRatio": "count_toptrader_long_short_ratio"}
+                elif name == "top_trader_pos":
+                    rename_map = {"longShortRatio": "sum_toptrader_long_short_ratio"}
+                elif name == "global_acc":
+                    rename_map = {"longShortRatio": "count_long_short_ratio"}
+                elif name == "taker_ratio":
+                    rename_map = {"buySellRatio": "sum_taker_long_short_vol_ratio"}
+
+                df = df.rename(columns=rename_map)
+
+                for col in df.columns:
+                    if col != 'timestamp':
+                        df[col] = pd.to_numeric(df[col], errors='coerce')
+
+                dfs.append(df)
+
+            if not dfs:
+                return None
+
+            merged_df = dfs[0]
+            for next_df in dfs[1:]:
+                merged_df = pd.merge(merged_df, next_df, on='timestamp', how='outer')
+
+            merged_df = merged_df.sort_values('timestamp').reset_index(drop=True)
+            merged_df['create_time'] = merged_df['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
+
+            return merged_df
+
+        except Exception as e:
+            logger.warning(f"Failed to fetch live metrics: {e}")
+            raise e
+
     def run(self, force_update=False):
         """
         Executes the ingestion pipeline across the target date range.
@@ -277,6 +470,7 @@ class BinanceMarketDataParser:
             "days_fetched_and_merged": 0
         }
 
+        today = pd.Timestamp.utcnow().tz_localize(None).normalize()
         target_range = pd.date_range(start=self.start_date, end=self.end_date, freq="D")
         for date_obj in target_range:
             stats["total_days"] += 1
@@ -286,21 +480,45 @@ class BinanceMarketDataParser:
                 stats["days_skipped_complete"] += 1
                 continue
 
-            logger.info(f"Processing missing/incomplete data for {date_str} ({self.interval})...")
+            is_today_or_later = date_obj >= today
+
+            if is_today_or_later:
+                logger.info(f"Processing live data for {date_str} (T-0, interval: {self.interval})...")
+            else:
+                logger.info(f"Processing missing/incomplete data for {date_str} ({self.interval})...")
+
             day_grid = pd.DataFrame({
                 'timestamp': pd.date_range(start=date_obj, periods=self.periods_per_day, freq=self.freq)
             })
 
-            for d_type in self.data_types:
-                df_part = self._get_parsed_df(d_type, date_str)
+            # Calculate start and end times in ms for live API
+            start_ms = int(date_obj.value / 10**6)
+            end_ms = int((date_obj + timedelta(days=1) - timedelta(milliseconds=1)).value / 10**6)
 
-                # For metrics, attach previous day's tail to ensure exact snapshot matching at 00:00:00
-                if d_type == "metrics":
-                    prev_date_str = (date_obj - timedelta(days=1)).strftime("%Y-%m-%d")
-                    df_prev = self._get_parsed_df(d_type, prev_date_str)
-                    dfs_to_combine = [d for d in [df_prev, df_part] if d is not None and not d.empty]
-                    if dfs_to_combine:
-                        df_part = pd.concat(dfs_to_combine, ignore_index=True)
+            live_api_failed = False
+
+            for d_type in self.data_types:
+                if is_today_or_later:
+                    try:
+                        if d_type == "metrics":
+                            # Subtract 5 minutes to get the boundary snapshot
+                            df_part = self._fetch_live_metrics(start_ms - 300000, end_ms)
+                        else:
+                            df_part = self._fetch_live_klines(d_type, start_ms, end_ms)
+                    except Exception as e:
+                        logger.warning(f"Error fetching live data for {d_type} on {date_str}: {e}")
+                        live_api_failed = True
+                        break
+                else:
+                    df_part = self._get_parsed_df(d_type, date_str)
+
+                    # For metrics, attach previous day's tail to ensure exact snapshot matching at 00:00:00
+                    if d_type == "metrics":
+                        prev_date_str = (date_obj - timedelta(days=1)).strftime("%Y-%m-%d")
+                        df_prev = self._get_parsed_df(d_type, prev_date_str)
+                        dfs_to_combine = [d for d in [df_prev, df_part] if d is not None and not d.empty]
+                        if dfs_to_combine:
+                            df_part = pd.concat(dfs_to_combine, ignore_index=True)
 
                 if df_part is not None and not df_part.empty:
                     day_grid = pd.merge_asof(
@@ -311,10 +529,18 @@ class BinanceMarketDataParser:
                         tolerance=pd.Timedelta(self.freq)
                     )
 
+            if is_today_or_later and live_api_failed:
+                logger.warning(f"Skipping live data merge for {date_str} due to API failures. (Likely geo-restriction, try VPN)")
+                continue
+
             # Robust non-destructive re-entry: preserve existing non-null data, fill only missing
             if main_df.empty:
                 main_df = day_grid
             else:
+                # For today's data, we overwrite existing rows to get the latest updates
+                if is_today_or_later:
+                    main_df = main_df[main_df['timestamp'].dt.normalize() != date_obj]
+
                 main_indexed = main_df.set_index('timestamp')
                 day_indexed = day_grid.set_index('timestamp')
                 combined_indexed = main_indexed.combine_first(day_indexed)
