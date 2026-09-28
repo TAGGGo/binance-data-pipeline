@@ -2,5 +2,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 .DS_Store
-# Optional: ignore output data folders if created
+.pytest_cache/
+
+# secrets
+.env
+
+# all collected data (re-creatable with `python3 -m mdh backfill`)
 data/
+*.duckdb
+*.duckdb.wal

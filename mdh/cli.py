@@ -1,0 +1,187 @@
+"""
+mdh — market data hub CLI
+
+  python3 -m mdh update [SOURCE ...]     incremental update (default: all sources)
+  python3 -m mdh backfill [SOURCE ...]   full-history pull (idempotent, safe to re-run)
+  python3 -m mdh status                  freshness of every table + recent run log
+  python3 -m mdh sql "SELECT ..."        run a query against data/market.duckdb
+  python3 -m mdh views                   rebuild derived views
+  python3 -m mdh docs                    regenerate docs/DATA_DICTIONARY.md
+  python3 -m mdh sources                 list source names
+"""
+from __future__ import annotations
+
+import argparse
+import logging
+import os
+import sys
+import time
+from types import SimpleNamespace
+
+os.environ["TZ"] = "UTC"
+if hasattr(time, "tzset"):
+    time.tzset()
+
+from mdh import settings  # noqa: E402
+from mdh.core import db  # noqa: E402
+from mdh.core.http import QuotaExceeded, RateLimitedClient  # noqa: E402
+
+log = logging.getLogger("mdh")
+
+
+def _ctx(con):
+    http = RateLimitedClient(settings.HOST_RPM, settings.MONTHLY_QUOTA, settings.STATE_DIR)
+    return SimpleNamespace(con=con, http=http, log=log)
+
+
+def build_views(con) -> list[str]:
+    sql = (settings.ROOT / "mdh" / "derived" / "views.sql").read_text()
+    built = []
+    for stmt in (s.strip() for s in sql.split("\n;;")):
+        if not stmt:
+            continue
+        name = stmt.split("VIEW", 1)[1].split()[0] if "VIEW" in stmt else "?"
+        try:
+            con.execute(stmt)
+            built.append(name)
+        except Exception as e:  # noqa: BLE001 - missing base tables on a fresh DB
+            log.info("view %s skipped: %s", name, str(e).splitlines()[0])
+    return built
+
+
+def cmd_run(names: list[str], full: bool) -> int:
+    from mdh import sources
+    names = names or sources.ALL
+    con = db.connect()
+    ctx = _ctx(con)
+    failures = 0
+    for name in names:
+        t0 = time.time()
+        try:
+            res = sources.get(name).run(ctx, full=full)
+            secs = time.time() - t0
+            for table, n in res.items():
+                db.log_ingest(con, name, table, n, "ok", "full" if full else "", secs)
+            log.info("✓ %-12s %s  (%.1fs)", name, ", ".join(f"{t}={n}" for t, n in res.items()), secs)
+        except QuotaExceeded as e:
+            db.log_ingest(con, name, None, 0, "quota", str(e), time.time() - t0)
+            log.warning("⏸ %-12s %s", name, e)
+        except Exception as e:  # noqa: BLE001 - one failing source must not stop the others
+            failures += 1
+            db.log_ingest(con, name, None, 0, "error", f"{type(e).__name__}: {e}", time.time() - t0)
+            log.error("✗ %-12s %s: %s", name, type(e).__name__, e)
+    built = build_views(con)
+    log.info("views: %s", ", ".join(built))
+    log.info("http calls this run: %s", ctx.http.calls_this_run)
+    con.close()
+    return 1 if failures else 0
+
+
+# (table, date column, grouping column or None)
+STATUS_TABLES = [
+    ("binance_1h", "timestamp", "symbol"),
+    ("fred_series", "date", "series_id"),
+    ("equity_daily", "date", "ticker"),
+    ("tv_bars", "ts", "symbol || ' ' || interval"),
+    ("stablecoin_supply", "date", "stablecoin"),
+    ("onchain_daily", "date", "asset"),
+    ("etf_flows_daily", "date", "asset || ' ' || source"),
+    ("etf_flows_by_fund", "date", "asset"),
+    ("deribit_dvol", "date", "currency"),
+    ("fear_greed", "date", None),
+    ("vix_daily", "date", None),
+    ("cg_global_snapshot", "ts", None),
+]
+
+
+def cmd_status() -> int:
+    con = db.connect(read_only=settings.DB_PATH.exists())
+    print(f"database: {settings.DB_PATH}  ({settings.DB_PATH.stat().st_size / 1e6:.1f} MB)\n")
+    print(f"{'table':20} {'series':34} {'rows':>9}  {'first':>19}  {'last':>19}")
+    print("-" * 108)
+    for table, dcol, grp in STATUS_TABLES:
+        if not db.table_exists(con, table):
+            print(f"{table:20} {'(not loaded yet)':34}")
+            continue
+        g = grp or "'-'"
+        rows = con.execute(f'SELECT {g} AS k, count(*), min("{dcol}"), max("{dcol}") FROM "{table}" '
+                           f"GROUP BY 1 ORDER BY 1").fetchall()
+        for k, n, a, b in rows:
+            print(f"{table:20} {str(k)[:34]:34} {n:>9}  {str(a)[:19]:>19}  {str(b)[:19]:>19}")
+    print("\nlast run per source:")
+    for r in con.execute("""SELECT source, max(run_at), arg_max(status, run_at), arg_max(message, run_at)
+                            FROM _ingest_log GROUP BY 1 ORDER BY 1""").fetchall():
+        print(f"  {r[0]:12} {str(r[1])[:19]}  {r[2]:6} {r[3] or ''}"[:150])
+    return 0
+
+
+def cmd_sql(query: str) -> int:
+    import pandas as pd
+    pd.set_option("display.width", 250)
+    pd.set_option("display.max_columns", 40)
+    pd.set_option("display.max_rows", 200)
+    con = db.connect(read_only=True)
+    print(con.execute(query).df().to_string(index=False))
+    return 0
+
+
+def cmd_docs() -> int:
+    con = db.connect(read_only=True)
+    lines = ["# Data dictionary", "",
+             "Auto-generated by `python3 -m mdh docs` from `data/market.duckdb`. "
+             "Tables are raw source data; `v_*` views are derived.", ""]
+    objs = con.execute("""SELECT table_name, table_type FROM information_schema.tables
+                          WHERE table_schema='main' AND table_name NOT LIKE '\\_%' ESCAPE '\\'
+                          ORDER BY table_type, table_name""").fetchall()
+    for name, ttype in objs:
+        n = con.execute(f'SELECT count(*) FROM "{name}"').fetchone()[0]
+        lines += [f"## `{name}`  ({'view' if ttype == 'VIEW' else 'table'}, {n:,} rows)", "",
+                  "| column | type |", "|---|---|"]
+        for c, t, *_ in con.execute(f'DESCRIBE "{name}"').fetchall():
+            lines.append(f"| {c} | {t} |")
+        lines.append("")
+    out = settings.ROOT / "docs" / "DATA_DICTIONARY.md"
+    out.parent.mkdir(exist_ok=True)
+    out.write_text("\n".join(lines))
+    print(f"wrote {out}")
+    return 0
+
+
+def main(argv=None) -> int:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+                        datefmt="%Y-%m-%d %H:%M:%S")
+    settings.load_env()
+    ap = argparse.ArgumentParser(prog="mdh", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    for c in ("update", "backfill"):
+        p = sub.add_parser(c)
+        p.add_argument("sources", nargs="*")
+    sub.add_parser("status")
+    sub.add_parser("views")
+    sub.add_parser("docs")
+    sub.add_parser("sources")
+    p = sub.add_parser("sql")
+    p.add_argument("query")
+    a = ap.parse_args(argv)
+
+    if a.cmd in ("update", "backfill"):
+        return cmd_run(a.sources, full=a.cmd == "backfill")
+    if a.cmd == "status":
+        return cmd_status()
+    if a.cmd == "sql":
+        return cmd_sql(a.query)
+    if a.cmd == "views":
+        con = db.connect()
+        print("built:", build_views(con))
+        return 0
+    if a.cmd == "docs":
+        return cmd_docs()
+    if a.cmd == "sources":
+        from mdh import sources
+        print("\n".join(sources.ALL))
+        return 0
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

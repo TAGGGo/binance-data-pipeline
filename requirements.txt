@@ -1,0 +1,7 @@
+requests>=2.31
+pandas>=2.0
+duckdb>=1.0
+pyarrow>=14
+lxml>=5
+# TradingView bars (TOTAL3, BTC.D, DXY...). Unofficial; not on PyPI.
+tvdatafeed @ git+https://github.com/rongardF/tvdatafeed.git
