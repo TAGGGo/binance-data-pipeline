@@ -17,6 +17,7 @@
   --inflow: #2a78d6;      /* diverging pole: inflow */
   --outflow: #e34948;     /* diverging pole: outflow */
   --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;  /* BTC ETH SOL XRP */
+  --s5: #e87ba4; --s7: #4a3aa7;
   --grid: rgba(14,22,33,.07);
   --chip: #eef1f5;
   --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
@@ -27,14 +28,14 @@
   :root:not([data-theme="light"]) {
     --bg: #0e1116; --panel: #161a21; --ink: #eef1f5; --ink-2: #a3acb9; --ink-3: #6f7886; --rule: #252b34;
     --accent: #3987e5; --up: #2fb573; --down: #e66767; --inflow: #3987e5; --outflow: #e66767;
-    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s7: #9085e9;
     --grid: rgba(238,241,245,.07); --chip: #1f252e; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0e1116; --panel: #161a21; --ink: #eef1f5; --ink-2: #a3acb9; --ink-3: #6f7886; --rule: #252b34;
   --accent: #3987e5; --up: #2fb573; --down: #e66767; --inflow: #3987e5; --outflow: #e66767;
-  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s7: #9085e9;
   --grid: rgba(238,241,245,.07); --chip: #1f252e; color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -84,6 +85,16 @@ h2 { margin: 0; font-family: var(--f-display); font-stretch: 85%; font-weight: 7
 .chart { position: relative; height: 210px; width: 100%; }
 .chart.tall { height: 280px; }
 .chart.short { height: 150px; }
+.chart.xtall { height: 380px; }
+.toggles { gap: 6px; }
+.tgl { appearance: none; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); font: 500 12px/1 var(--f-data);
+  padding: 6px 10px; border-radius: 99px; display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+.tgl i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.tgl[aria-pressed="false"] { color: var(--ink-3); background: transparent; }
+.tgl[aria-pressed="false"] i { opacity: .3; }
+.tgl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+details.card summary { cursor: pointer; list-style: revert; }
+.stat .v.up { color: var(--up); } .stat .v.down { color: var(--down); }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font: 500 11.5px/1.2 var(--f-data); color: var(--ink-2); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend i { width: 14px; height: 2px; display: inline-block; border-radius: 2px; }
@@ -394,42 +405,115 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
   }
 
   // ================================================================ DERIVATIVES
+  // One overlay chart: every series rescaled to 0–100 within the visible range (0 = its low, 100 = its high),
+  // so lines of very different units share one honest axis. Tooltips show the real values.
+  const DERIV_SERIES = [
+    { key: "price",       label: "Price",               color: "--ink", width: 2.5, fmt: (x) => fmtPx(x), on: true },
+    { key: "oi_b",        label: "Open interest",       color: "--s1", fmt: (x) => "$" + fmt(x, 2) + "B", on: true },
+    { key: "ls_accounts", label: "Long/short (accounts)", color: "--s2", fmt: (x) => fmt(x, 2), on: true },
+    { key: "ls_top",      label: "Long/short (top traders)", color: "--s3", fmt: (x) => fmt(x, 2), on: false, dailyOnly: true },
+    { key: "taker",       label: "Taker buy/sell",      color: "--s4", fmt: (x) => fmt(x, 2), on: false },
+    { key: "premium_bp",  label: "Perp premium",        color: "--s5", fmt: (x) => fmt(x, 1) + " bp", on: false },
+    { key: "basis_bp",    label: "Basis vs spot",       color: "--s7", fmt: (x) => fmt(x, 1) + " bp", on: false, dailyOnly: true },
+  ];
+  const rescale = (arr) => {
+    const v = arr.filter(isNum); if (!v.length) return arr.map(() => null);
+    const lo = Math.min(...v), hi = Math.max(...v), span = hi - lo || 1;
+    return arr.map((x) => isNum(x) ? ((x - lo) / span) * 100 : null);
+  };
+  function readFlow(p, o) {  // classic price/OI read
+    if (!isNum(p) || !isNum(o)) return "";
+    const P = p > 0.5 ? 1 : p < -0.5 ? -1 : 0, O = o > 1 ? 1 : o < -1 ? -1 : 0;
+    if (P > 0 && O > 0) return "Price up with rising OI: new positions are backing the move.";
+    if (P > 0 && O < 0) return "Price up while OI falls: shorts closing (short covering), less fresh conviction.";
+    if (P < 0 && O > 0) return "Price down with rising OI: new shorts opening, or longs adding into weakness.";
+    if (P < 0 && O < 0) return "Price down while OI falls: longs closing or being liquidated.";
+    if (O > 0) return "Price flat while OI builds: leverage is accumulating; watch for a breakout either way.";
+    if (O < 0) return "Price flat while OI drops: positions being cleared out.";
+    return "Price and OI both roughly flat.";
+  }
   function renderDeriv() {
     const v = $("#view-deriv");
     const syms = Object.keys(D.deriv);
     if (!D.deriv[state.derivSym]) state.derivSym = syms[0];
+    state.derivOn = state.derivOn || Object.fromEntries(DERIV_SERIES.map((s) => [s.key, s.on]));
     const S = D.deriv[state.derivSym];
     const hourly = state.derivRange === "14h";
     let X;
     if (hourly) X = S.hourly; else { const n = Number(state.derivRange); X = n ? cut(S.daily, Math.max(0, S.daily.date.length - n)) : S.daily; }
     const L = hourly ? X.ts.map((t) => t.slice(5)) : X.date;
     const asset = state.derivSym.replace("USDT", "");
-    const color = SERIES[asset] ? css(SERIES[asset]) : css("--ink");
+    const avail = DERIV_SERIES.filter((s) => X[s.key] && !(hourly && s.dailyOnly));
+
+    // summary over the visible range
+    const first = (a) => a.find(isNum), last = (a) => lastVal(a);
+    const pChg = pct(last(X.price), first(X.price)), oChg = pct(last(X.oi_b), first(X.oi_b));
+    const ls0 = first(X.ls_accounts), ls1 = last(X.ls_accounts);
+    const prem = last(X.premium_bp);
+
     v.innerHTML = `
       <div class="controls">
         ${seg("derivSym", syms.map((s) => [s, s.replace("USDT", "")]), state.derivSym)}
         ${seg("derivRange", [["14h", "14 days hourly"], ["90", "90 days"], ["365", "1 year"], ["0", "All"]], state.derivRange)}
       </div>
       <div><span class="eyebrow">Binance USDT-margined perpetual · ${L[0]} → ${L[L.length - 1]}${hourly ? " UTC" : ""}</span><h2>${asset} positioning</h2>
-      <p class="sub">Binance only, not the whole market. Daily view shows the last value of the day for open interest and long/short, and the day's average for premium, basis and taker ratio.</p></div>
-      <div class="grid">
-        ${card("dv-px", asset + " spot price")}
-        ${card("dv-oi", "Open interest (USD)")}
-        ${card("dv-prem", "Perp premium index", { note: "Premium of the perpetual over the spot index, in basis points. Binance funding per 8h = premium + clamp(1 bp − premium, ±5 bp), so a premium between −4 and +6 bp still pays the default +1 bp to shorts." })}
-        ${hourly ? "" : card("dv-basis", "Futures basis vs spot", { note: "Perp close divided by spot close, minus one, in basis points." })}
-        ${card("dv-ls", "Long/short ratio", { legend: legendItem(color, "All accounts") + (hourly ? "" : legendItem(css("--ink-3"), "Top-trader positions")) })}
-        ${card("dv-taker", "Taker buy/sell volume ratio", { note: "Above 1 means aggressive buyers outweighed sellers." })}
-      </div>`;
-    const one = (id, data, f, c = color) => { line(id, L, [{ label: "", data, borderColor: c, backgroundColor: c }], { yFmt: f }); $("#" + id + "-last").textContent = f(lastVal(data)); };
-    one("dv-px", X.price, fmtPx);
-    one("dv-oi", X.oi_b, (x) => "$" + fmt(x, 2) + "B");
-    polarityBars("dv-prem", L, X.premium_bp, { yFmt: (x) => fmt(x, 1) + " bp", label: "Premium" }); $("#dv-prem-last").textContent = fmt(lastVal(X.premium_bp), 2) + " bp";
-    if (!hourly) { polarityBars("dv-basis", L, X.basis_bp, { yFmt: (x) => fmt(x, 1) + " bp", label: "Basis" }); $("#dv-basis-last").textContent = fmt(lastVal(X.basis_bp), 2) + " bp"; }
-    const lsSets = [{ label: "All accounts", data: X.ls_accounts, borderColor: color, backgroundColor: color }];
-    if (!hourly) lsSets.push({ label: "Top-trader positions", data: X.ls_top, borderColor: css("--ink-3"), backgroundColor: css("--ink-3"), borderDash: [4, 3] });
-    line("dv-ls", L, lsSets, { yFmt: (x) => fmt(x, 2) }); $("#dv-ls-last").textContent = fmt(lastVal(X.ls_accounts), 2);
-    one("dv-taker", X.taker, (x) => fmt(x, 2), css("--ink-2"));
+      <p class="sub">Binance only, not the whole market.</p></div>
+      <div class="stats">
+        <div class="stat"><div class="k">Price over range</div><div class="v ${signCls(pChg)}">${sgn(pChg, 1)}</div><div class="note">${fmtPx(last(X.price))}</div></div>
+        <div class="stat"><div class="k">Open interest</div><div class="v ${signCls(oChg)}">${sgn(oChg, 1)}</div><div class="note">$${fmt(last(X.oi_b), 2)}B now</div></div>
+        <div class="stat"><div class="k">Long/short (accounts)</div><div class="v">${fmt(ls1, 2)}</div><div class="note">from ${fmt(ls0, 2)} · ${isNum(ls1) ? (ls1 > 1 ? "more accounts long" : "more accounts short") : ""}</div></div>
+        <div class="stat"><div class="k">Perp premium</div><div class="v">${fmt(prem, 1)} bp</div><div class="note">${isNum(prem) ? (prem > 6 ? "rich: funding above default" : prem < -4 ? "discount: funding below default" : "normal range") : ""}</div></div>
+      </div>
+      <div class="note"><b>Read:</b> ${readFlow(pChg, oChg)}</div>
+      <div class="card">
+        <div class="card-h"><h3>Overlay</h3><span class="last">each line scaled to its own low (0) and high (100) in this range · hover for real values</span></div>
+        <div class="legend toggles" role="group" aria-label="Series">${avail.map((s) =>
+          `<button class="tgl" data-series="${s.key}" aria-pressed="${!!state.derivOn[s.key]}"><i style="background:var(${s.color})"></i>${s.label}</button>`).join("")}</div>
+        <div class="chart xtall"><canvas id="dv-overlay" role="img" aria-label="${asset} price, open interest and positioning overlay"></canvas></div>
+      </div>
+      <details class="card" ${state.derivDetails ? "open" : ""} id="dv-details"><summary><h3 style="display:inline">Each series on its own scale</h3></summary>
+        <div class="grid" style="margin-top:10px">
+          ${card("dv-px", asset + " spot price")}
+          ${card("dv-oi", "Open interest (USD)")}
+          ${card("dv-ls", "Long/short ratio (accounts)")}
+          ${card("dv-prem", "Perp premium index", { note: "Premium of the perpetual over the spot index, in bp. Binance funding per 8h = premium + clamp(1 bp − premium, ±5 bp), so −4 to +6 bp still pays the default +1 bp to shorts." })}
+        </div>
+      </details>`;
+
+    // overlay
+    const o = baseOpts();
+    o.scales.y.min = 0; o.scales.y.max = 100;
+    o.scales.y.ticks.callback = (val) => (val === 0 ? "low" : val === 50 ? "mid" : val === 100 ? "high" : "");
+    o.scales.y.ticks.stepSize = 50; o.scales.y.ticks.maxTicksLimit = 3;
+    o.layout = { padding: { top: 6, bottom: 2 } };
+    o.plugins.tooltip.callbacks = { label: (ctx) => { const s = avail[ctx.datasetIndex]; return ` ${s.label}: ${s.fmt(X[s.key][ctx.dataIndex])}`; } };
+    draw("dv-overlay", { type: "line", options: o, data: { labels: L, datasets: avail.map((s) => ({
+      label: s.label, data: rescale(X[s.key]), hidden: !state.derivOn[s.key],
+      borderColor: css(s.color), backgroundColor: css(s.color), borderWidth: s.width || 1.75,
+      pointRadius: 0, pointHoverRadius: 4, tension: 0, spanGaps: true, fill: false, clip: 6,
+    })) } });
+
+    // detail small multiples (only drawn when opened, to keep things light)
+    const drawDetails = () => {
+      const color = SERIES[asset] ? css(SERIES[asset]) : css("--ink");
+      const one = (id, data, f, c = color) => { line(id, L, [{ label: "", data, borderColor: c, backgroundColor: c }], { yFmt: f }); $("#" + id + "-last").textContent = f(lastVal(data)); };
+      one("dv-px", X.price, fmtPx);
+      one("dv-oi", X.oi_b, (x) => "$" + fmt(x, 2) + "B");
+      one("dv-ls", X.ls_accounts, (x) => fmt(x, 2), css("--s2"));
+      polarityBars("dv-prem", L, X.premium_bp, { yFmt: (x) => fmt(x, 1) + " bp", label: "Premium" }); $("#dv-prem-last").textContent = fmt(lastVal(X.premium_bp), 2) + " bp";
+    };
+    const det = $("#dv-details");
+    if (det.open) drawDetails();
+    det.addEventListener("toggle", () => { state.derivDetails = det.open; save(); if (det.open) drawDetails(); });
   }
+
+  document.addEventListener("click", (ev) => {
+    const b = ev.target.closest("button.tgl"); if (!b) return;
+    const k = b.dataset.series; state.derivOn[k] = !state.derivOn[k]; save();
+    b.setAttribute("aria-pressed", String(state.derivOn[k]));
+    const ch = charts["dv-overlay"]; if (!ch) return;
+    const ds = ch.data.datasets.find((d) => d.label === b.textContent.trim()); if (ds) { ds.hidden = !state.derivOn[k]; ch.update("none"); }
+  });
 
   // ================================================================ shell
   const renderers = { overview: renderOverview, etf: renderEtf, market: renderMarket, deriv: renderDeriv };
