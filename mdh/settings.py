@@ -52,6 +52,8 @@ MONTHLY_QUOTA = {
 BINANCE_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "ZECUSDT", "DASHUSDT", "STRKUSDT"]
 BINANCE_INTERVALS = ["1h"]
 BINANCE_START = "2024-08-01"
+# symbols whose history intentionally starts later (keeps the hourly run from backfilling them)
+BINANCE_START_OVERRIDES = {"DASHUSDT": "2025-08-01", "STRKUSDT": "2025-08-01"}
 
 # ----------------------------------------------------------------------------- FRED (id: description)
 FRED_SERIES = {
@@ -95,6 +97,6 @@ TV_INTERVALS = ["1d", "1h"]   # daily = full history; hourly = rolling ~2 months
 # ----------------------------------------------------------------------------- Crypto-wide
 ETF_ASSETS = ["BTC", "ETH", "SOL", "XRP"]
 COINMETRICS_ASSETS = ["btc", "eth"]
-COINMETRICS_METRICS = ["PriceUSD", "CapMrktCurUSD", "CapRealUSD", "CapMVRVCur", "AdrActCnt", "TxCnt", "SplyCur"]
+COINMETRICS_METRICS = ["PriceUSD", "CapMrktCurUSD", "CapMVRVCur", "AdrActCnt", "TxCnt", "SplyCur"]
 DEFILLAMA_STABLES = {"ALL": None, "USDT": 1, "USDC": 2}   # name: DefiLlama stablecoin id
 DERIBIT_DVOL = ["BTC", "ETH"]
