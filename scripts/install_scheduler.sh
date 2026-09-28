@@ -22,7 +22,7 @@ cat > "$PLIST" <<EOF
 <plist version="1.0"><dict>
   <key>Label</key><string>$LABEL</string>
   <key>ProgramArguments</key><array>
-    <string>$PY</string><string>-m</string><string>mdh</string><string>update</string>
+    <string>/bin/bash</string><string>$REPO/scripts/run_update.sh</string>
   </array>
   <key>WorkingDirectory</key><string>$REPO</string>
   <key>StartCalendarInterval</key><dict><key>Minute</key><integer>7</integer></dict>
@@ -33,5 +33,6 @@ cat > "$PLIST" <<EOF
 EOF
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
 launchctl bootstrap "gui/$(id -u)" "$PLIST"
-echo "installed $LABEL: runs every hour at :07 using $PY"
+echo "installed $LABEL: runs scripts/run_update.sh every hour at :07 (python: $PY)"
+echo "If the log shows 'Operation not permitted', add /bin/bash and $PY to System Settings > Privacy & Security > Full Disk Access."
 echo "tail -f $REPO/data/logs/update.log"
