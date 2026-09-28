@@ -6,7 +6,7 @@ import numpy as np
 import os
 import shutil
 from datetime import datetime, timedelta
-from market_data_parser import BinanceMarketDataParser
+from mdh.sources.binance.parser import BinanceMarketDataParser
 
 class TestLiveFetchingAndBlending(unittest.TestCase):
     def setUp(self):

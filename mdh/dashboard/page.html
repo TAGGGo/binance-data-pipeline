@@ -1,0 +1,714 @@
+<title>Market Data Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a trading desk — sticky tab bar, summary tiles first, then small-multiple charts on a quiet grid. */
+:root {
+  --bg: #f4f6f9;          /* page ground, slight blue bias */
+  --panel: #ffffff;
+  --ink: #0e1621;
+  --ink-2: #566172;
+  --ink-3: #8a93a1;
+  --rule: #e1e5eb;
+  --accent: #2a78d6;      /* UI accent = series slot 1 */
+  --up: #1a8f5a;          /* semantic: price up */
+  --down: #d03b3b;        /* semantic: price down */
+  --inflow: #2a78d6;      /* diverging pole: inflow */
+  --outflow: #e34948;     /* diverging pole: outflow */
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;  /* BTC ETH SOL XRP */
+  --s5: #e87ba4; --s7: #4a3aa7;
+  --grid: rgba(14,22,33,.07);
+  --chip: #eef1f5;
+  --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-data: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1116; --panel: #161a21; --ink: #eef1f5; --ink-2: #a3acb9; --ink-3: #6f7886; --rule: #252b34;
+    --accent: #3987e5; --up: #2fb573; --down: #e66767; --inflow: #3987e5; --outflow: #e66767;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s7: #9085e9;
+    --grid: rgba(238,241,245,.07); --chip: #1f252e; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1116; --panel: #161a21; --ink: #eef1f5; --ink-2: #a3acb9; --ink-3: #6f7886; --rule: #252b34;
+  --accent: #3987e5; --up: #2fb573; --down: #e66767; --inflow: #3987e5; --outflow: #e66767;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s7: #9085e9;
+  --grid: rgba(238,241,245,.07); --chip: #1f252e; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.45; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-inline: 16px; padding-block: 0 48px; }
+header.bar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg);
+  border-bottom: 1px solid var(--rule);
+}
+.bar-inner { max-width: 1240px; margin: 0 auto; padding-inline: 16px; padding-block: 12px 0; display: flex; flex-wrap: wrap; align-items: end; gap: 8px 24px; }
+.brand { display: flex; flex-direction: column; gap: 2px; padding-bottom: 10px; }
+.brand h1 { margin: 0; font-family: var(--f-display); font-stretch: 78%; font-weight: 750; font-size: 22px; letter-spacing: .01em; text-transform: uppercase; }
+.brand .asof { font-family: var(--f-data); font-size: 11px; color: var(--ink-2); }
+nav.tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; margin-left: auto; }
+nav.tabs button {
+  appearance: none; border: 0; background: none; color: var(--ink-2); font: 600 13px/1 var(--f-body);
+  padding: 10px 12px 12px; border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap;
+}
+nav.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+nav.tabs button:focus-visible, .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+section.view { display: flex; flex-direction: column; gap: 20px; padding-top: 20px; }
+h2 { margin: 0; font-family: var(--f-display); font-stretch: 85%; font-weight: 700; font-size: 17px; text-wrap: balance; }
+.sub { color: var(--ink-2); font-size: 12.5px; margin: 2px 0 0; max-width: 72ch; }
+.eyebrow { font: 500 10.5px/1 var(--f-data); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.seg { display: inline-flex; background: var(--chip); border-radius: 8px; padding: 3px; gap: 2px; }
+.seg button { appearance: none; border: 0; background: none; color: var(--ink-2); font: 600 12px/1 var(--f-body); padding: 7px 10px; border-radius: 6px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+.tile { background: var(--panel); box-shadow: 1px 0 0 var(--rule), 0 1px 0 var(--rule); padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tile .k { font: 500 10.5px/1.2 var(--f-data); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); display: flex; align-items: center; gap: 6px; }
+.tile .v { font-family: var(--f-display); font-stretch: 80%; font-weight: 700; font-size: 26px; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.tile .d { font: 500 11.5px/1.3 var(--f-data); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+.up { color: var(--up); } .down { color: var(--down); }
+.pill { display: inline-block; font: 600 10.5px/1 var(--f-data); padding: 3px 6px; border-radius: 99px; background: var(--chip); color: var(--ink-2); letter-spacing: .03em; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+.grid.two { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+.card { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 14px 10px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.card-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.card-h h3 { margin: 0; font: 650 13.5px/1.2 var(--f-body); }
+.card-h .last { font: 500 12px/1 var(--f-data); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.chart { position: relative; height: 210px; width: 100%; }
+.chart.tall { height: 280px; }
+.chart.short { height: 150px; }
+.chart.xtall { height: 380px; }
+.card.main { gap: 10px; }
+.main-chart { height: 520px; }
+.readout { font: 500 11.5px/1.4 var(--f-data); color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 4px 14px; font-variant-numeric: tabular-nums; min-height: 1.4em; }
+.readout b { color: var(--ink); font-weight: 600; }
+.readout .ro-d { color: var(--ink); }
+.readout .ro-m { display: inline-flex; align-items: center; gap: 5px; }
+.readout .ro-m i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+.tgl .grp { font-size: 9.5px; letter-spacing: .06em; color: var(--ink-3); }
+.card-h .last.big { font: 700 20px/1 var(--f-display); font-stretch: 82%; color: var(--ink); }
+@media (max-width: 520px) { .main-chart { height: 380px; } }
+.toggles { gap: 6px; }
+.tgl { appearance: none; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); font: 500 12px/1 var(--f-data);
+  padding: 6px 10px; border-radius: 99px; display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+.tgl i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.tgl[aria-pressed="false"] { color: var(--ink-3); background: transparent; }
+.tgl[aria-pressed="false"] i { opacity: .3; }
+.tgl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+details.card summary { cursor: pointer; list-style: revert; }
+.stat .v.up { color: var(--up); } .stat .v.down { color: var(--down); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font: 500 11.5px/1.2 var(--f-data); color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 2px; display: inline-block; border-radius: 2px; }
+.legend i.sq { width: 10px; height: 10px; border-radius: 2px; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.stat .k { font: 500 10.5px/1.2 var(--f-data); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+.stat .v { font: 700 20px/1.2 var(--f-display); font-stretch: 82%; font-variant-numeric: tabular-nums; }
+
+.tbl-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font: 500 12px/1.3 var(--f-data); font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--ink-2); font-weight: 500; font-size: 11px; }
+td.pos { color: var(--inflow); } td.neg { color: var(--outflow); } td.zero { color: var(--ink-3); }
+.corr td.cell { font-weight: 600; }
+
+.note { font-size: 12px; color: var(--ink-2); max-width: 90ch; }
+.note b { color: var(--ink); font-weight: 600; }
+footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.fresh { display: flex; flex-wrap: wrap; gap: 6px; }
+.err { padding: 24px; border: 1px solid var(--rule); background: var(--panel); border-radius: 10px; }
+@media (max-width: 520px) {
+  .grid, .grid.two { grid-template-columns: 1fr; }
+  .tile .v { font-size: 22px; }
+  nav.tabs { margin-left: 0; width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<header class="bar">
+  <div class="bar-inner">
+    <div class="brand">
+      <h1>Market Data Hub</h1>
+      <span class="asof" id="asof">Loading snapshot…</span>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Dashboard sections">
+      <button role="tab" id="tab-overview" data-view="overview" aria-selected="true">Overview</button>
+      <button role="tab" id="tab-etf" data-view="etf" aria-selected="false">ETF flows</button>
+      <button role="tab" id="tab-market" data-view="market" aria-selected="false">Market &amp; macro</button>
+      <button role="tab" id="tab-deriv" data-view="deriv" aria-selected="false">Derivatives</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="view" id="view-overview"></section>
+  <section class="view" id="view-etf" hidden></section>
+  <section class="view" id="view-market" hidden></section>
+  <section class="view" id="view-deriv" hidden></section>
+  <footer id="footer"></footer>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+(() => {
+  const ASSETS = ["BTC", "ETH", "SOL", "XRP"];
+  const SERIES = { BTC: "--s1", ETH: "--s2", SOL: "--s3", XRP: "--s4" };
+  let D = null;
+  const charts = {};
+  const state = { view: "overview", etfAsset: "BTC", etfRange: 90, mktRange: 1095, derivSym: "BTCUSDT", derivRange: "90" };
+  try { const s = JSON.parse(localStorage.getItem("amd-state") || "{}"); Object.assign(state, s); } catch (e) {}
+  const save = () => { try { localStorage.setItem("amd-state", JSON.stringify(state)); } catch (e) {} };
+
+  // ---------- helpers
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const $ = (s, r = document) => r.querySelector(s);
+  const el = (tag, attrs = {}, html = "") => { const e = document.createElement(tag); for (const k in attrs) e.setAttribute(k, attrs[k]); e.innerHTML = html; return e; };
+  const isNum = (x) => typeof x === "number" && isFinite(x);
+  const lastIdx = (arr) => { for (let i = arr.length - 1; i >= 0; i--) if (isNum(arr[i])) return i; return -1; };
+  const lastVal = (arr) => { const i = lastIdx(arr); return i < 0 ? null : arr[i]; };
+  const valAgo = (arr, i, n) => { for (let j = i - n; j >= 0 && j >= i - n - 7; j--) if (isNum(arr[j])) return arr[j]; return null; };
+  const fmt = (x, d = 2) => isNum(x) ? x.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }) : "–";
+  const fmtPx = (x) => !isNum(x) ? "–" : x >= 1000 ? "$" + fmt(x, 0) : x >= 10 ? "$" + fmt(x, 2) : "$" + fmt(x, 4);
+  const fmtM = (m) => !isNum(m) ? "–" : (Math.abs(m) >= 1000 ? (m < 0 ? "−$" : "+$") + fmt(Math.abs(m) / 1000, 2) + "B" : (m < 0 ? "−$" : m > 0 ? "+$" : "$") + fmt(Math.abs(m), 1) + "M");
+  const pct = (a, b) => (isNum(a) && isNum(b) && b !== 0) ? (a / b - 1) * 100 : null;
+  const signCls = (x) => !isNum(x) ? "" : x > 0 ? "up" : x < 0 ? "down" : "";
+  const sgn = (x, d = 2, unit = "%") => !isNum(x) ? "–" : (x > 0 ? "+" : x < 0 ? "−" : "") + fmt(Math.abs(x), d) + unit;
+  const sliceLast = (obj, keys, n) => { const out = {}; for (const k of keys) out[k] = n ? obj[k].slice(-n) : obj[k]; return out; };
+  const sinceDays = (dates, days) => { if (!days) return 0; const end = new Date(dates[dates.length - 1]); const start = new Date(end - days * 864e5); let i = 0; while (i < dates.length && new Date(dates[i]) < start) i++; return i; };
+  const cut = (obj, from) => { const o = {}; for (const k in obj) o[k] = obj[k].slice(from); return o; };
+
+  // ---------- chart factory (Chart.js), colors from theme tokens
+  function baseOpts(extra = {}) {
+    const ink2 = css("--ink-2"), grid = css("--grid");
+    return Object.assign({
+      responsive: true, maintainAspectRatio: false, animation: false, normalized: true,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: css("--panel"), titleColor: css("--ink"), bodyColor: css("--ink"), borderColor: css("--rule"), borderWidth: 1,
+          titleFont: { family: "'IBM Plex Mono', ui-monospace, Menlo, monospace", size: 11 }, bodyFont: { family: "'IBM Plex Mono', ui-monospace, Menlo, monospace", size: 11 }, padding: 8, boxPadding: 4, usePointStyle: true,
+        },
+      },
+      scales: {
+        x: { grid: { display: false }, border: { color: css("--rule") }, ticks: { color: ink2, font: { family: "'IBM Plex Mono', ui-monospace, Menlo, monospace", size: 10 }, maxTicksLimit: 6, maxRotation: 0, autoSkip: true } },
+        y: { grid: { color: grid }, border: { display: false }, ticks: { color: ink2, font: { family: "'IBM Plex Mono', ui-monospace, Menlo, monospace", size: 10 }, maxTicksLimit: 5 } },
+      },
+    }, extra);
+  }
+  function draw(id, config) {
+    if (charts[id]) charts[id].destroy();
+    const c = document.getElementById(id);
+    if (!c || !window.Chart) return;
+    charts[id] = new Chart(c, config);
+  }
+  function line(id, labels, datasets, { yFmt, yMin } = {}) {
+    const o = baseOpts();
+    if (yFmt) { o.scales.y.ticks.callback = (v) => yFmt(v); o.plugins.tooltip.callbacks = { label: (ctx) => ` ${ctx.dataset.label}: ${yFmt(ctx.parsed.y)}` }; }
+    if (yMin !== undefined) o.scales.y.min = yMin;
+    draw(id, { type: "line", data: { labels, datasets: datasets.map((d) => Object.assign({ borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: 0, spanGaps: true, fill: false }, d)) }, options: o });
+  }
+  function polarityBars(id, labels, values, { yFmt, label = "Net flow" } = {}) {
+    const inC = css("--inflow"), outC = css("--outflow");
+    const o = baseOpts();
+    o.interaction = { mode: "index", intersect: false };
+    if (yFmt) { o.scales.y.ticks.callback = (v) => yFmt(v); o.plugins.tooltip.callbacks = { label: (ctx) => ` ${label}: ${yFmt(ctx.parsed.y)}` }; }
+    draw(id, { type: "bar", data: { labels, datasets: [{ label, data: values, backgroundColor: values.map((v) => v >= 0 ? inC : outC), borderRadius: 2, borderSkipped: "start", maxBarThickness: 14, categoryPercentage: .9, barPercentage: .9 }] }, options: o });
+  }
+
+  // ---------- skeleton builders
+  const card = (id, title, { cls = "", last = "", legend = "", note = "" } = {}) => `
+    <div class="card"><div class="card-h"><h3>${title}</h3><span class="last" id="${id}-last">${last}</span></div>
+    ${legend ? `<div class="legend">${legend}</div>` : ""}
+    <div class="chart ${cls}"><canvas id="${id}" role="img" aria-label="${title}"></canvas></div>
+    ${note ? `<div class="note">${note}</div>` : ""}</div>`;
+  const seg = (name, opts, cur) => `<div class="seg" role="group" aria-label="${name}">${opts.map(([v, t]) => `<button data-seg="${name}" data-v="${v}" aria-pressed="${String(v) === String(cur)}">${t}</button>`).join("")}</div>`;
+  const legendItem = (color, text, sq = false) => `<span><i class="${sq ? "sq" : ""}" style="background:${color}"></i>${text}</span>`;
+
+  // ================================================================ OVERVIEW
+  function renderOverview() {
+    const v = $("#view-overview");
+    const M = D.macro, n = M.date.length;
+    const tiles = [];
+    // prices (Binance daily close; macro BTC fallback)
+    for (const a of ASSETS) {
+      const dd = D.deriv[a + "USDT"]?.daily;
+      const px = dd ? dd.price : (a === "BTC" ? M.btc : a === "ETH" ? M.eth : []);
+      const i = lastIdx(px), last = px[i];
+      const d1 = pct(last, valAgo(px, i, 1)), d7 = pct(last, valAgo(px, i, 7));
+      tiles.push(`<div class="tile"><div class="k"><span class="dot" style="background:var(${SERIES[a]})"></span>${a}</div><div class="v">${fmtPx(last)}</div><div class="d"><span class="${signCls(d1)}">${sgn(d1)} 1d</span> · <span class="${signCls(d7)}">${sgn(d7)} 7d</span></div></div>`);
+    }
+    const t = (k, val, delta) => `<div class="tile"><div class="k">${k}</div><div class="v">${val}</div><div class="d">${delta}</div></div>`;
+    const i10 = lastIdx(M.us10y), y10 = M.us10y[i10], y10w = valAgo(M.us10y, i10, 7);
+    tiles.push(t("US 10Y yield", fmt(y10, 2) + "%", `<span class="${signCls(isNum(y10w) ? y10 - y10w : null)}">${sgn(isNum(y10w) ? (y10 - y10w) * 100 : null, 0, " bp")} 1w</span> · ${M.date[i10].slice(5)}`));
+    const idx = lastIdx(M.dxy), dx = M.dxy[idx], dxw = valAgo(M.dxy, idx, 7);
+    tiles.push(t("DXY", fmt(dx, 2), `<span class="${signCls(pct(dx, dxw))}">${sgn(pct(dx, dxw))} 1w</span>`));
+    const ib = lastIdx(M.btc_d_ex), bx = M.btc_d_ex[ib], bxw = valAgo(M.btc_d_ex, ib, 7);
+    tiles.push(t("BTC dom. ex-stables", fmt(bx, 2) + "%", `standard ${fmt(lastVal(M.btc_d), 2)}% · <span class="${signCls(isNum(bxw) ? bx - bxw : null)}">${sgn(isNum(bxw) ? bx - bxw : null, 2, " pt")} 1w</span>`));
+    const it = lastIdx(M.total3_b), t3 = M.total3_b[it], t3w = valAgo(M.total3_b, it, 7);
+    tiles.push(t("TOTAL3", "$" + fmt(t3, 0) + "B", `<span class="${signCls(pct(t3, t3w))}">${sgn(pct(t3, t3w))} 1w</span> · ex BTC &amp; ETH`));
+    const fg = lastVal(M.fg);
+    const fgLbl = !isNum(fg) ? "" : fg <= 24 ? "Extreme fear" : fg <= 44 ? "Fear" : fg <= 55 ? "Neutral" : fg <= 74 ? "Greed" : "Extreme greed";
+    tiles.push(t("Fear &amp; Greed", isNum(fg) ? fg : "–", `<span class="pill">${fgLbl}</span>`));
+    const inl = lastIdx(M.netliq_t), nl = M.netliq_t[inl], nlm = valAgo(M.netliq_t, inl, 30);
+    tiles.push(t("Fed net liquidity", "$" + fmt(nl, 2) + "T", `<span class="${signCls(isNum(nlm) ? nl - nlm : null)}">${sgn(isNum(nlm) ? (nl - nlm) * 1000 : null, 0, "B")} 30d</span>`));
+    const iv = lastIdx(M.vix);
+    tiles.push(t("VIX", fmt(M.vix[iv], 2), "close " + M.date[iv].slice(5)));
+
+    // ETF last session + 5 sessions
+    const etfTiles = ASSETS.map((a) => {
+      const e = D.etf[a], i = lastIdx(e.flow_m);
+      const s5 = e.flow_m.slice(Math.max(0, i - 4), i + 1).reduce((s, x) => s + (x || 0), 0);
+      const s30 = e.flow_m.slice(-30).reduce((s, x) => s + (x || 0), 0);
+      return `<div class="tile"><div class="k"><span class="dot" style="background:var(${SERIES[a]})"></span>${a} ETFs</div><div class="v">${fmtM(e.flow_m[i])}</div><div class="d">${e.date[i]} · 5 sessions ${fmtM(s5)} · 30 sessions ${fmtM(s30)}</div></div>`;
+    }).join("");
+
+    v.innerHTML = `
+      <div><span class="eyebrow">Snapshot</span><h2>Where things stand</h2><p class="sub">Latest close for each series. Crypto prices are Binance spot; rates and equities update after the US close.</p></div>
+      <div class="tiles">${tiles.join("")}</div>
+      <div><span class="eyebrow">Spot ETFs</span><h2>Net flows, latest session</h2></div>
+      <div class="tiles">${etfTiles}</div>
+      <div class="grid">${ASSETS.map((a) => card("ov-etf-" + a, `${a} ETF net flows, last 30 sessions`, { cls: "short" })).join("")}</div>`;
+    for (const a of ASSETS) {
+      const e = sliceLast(D.etf[a], ["date", "flow_m"], 30);
+      polarityBars("ov-etf-" + a, e.date, e.flow_m, { yFmt: (x) => fmtM(x) });
+      $("#ov-etf-" + a + "-last").textContent = "Σ " + fmtM(e.flow_m.reduce((s, x) => s + (x || 0), 0));
+    }
+  }
+
+  // ================================================================ ETF
+  function renderEtf() {
+    const v = $("#view-etf");
+    const a = state.etfAsset, E = D.etf[a];
+    const from = state.etfRange ? Math.max(0, E.date.length - state.etfRange) : 0;
+    const e = cut(E, from);
+    const flows = e.flow_m.filter(isNum);
+    const sum = flows.reduce((s, x) => s + x, 0);
+    const inD = flows.filter((x) => x > 0).length, outD = flows.filter((x) => x < 0).length;
+    const maxIn = Math.max(...flows), maxOut = Math.min(...flows);
+    let streak = 0, sDir = 0;
+    for (let i = flows.length - 1; i >= 0; i--) { const s = Math.sign(flows[i]); if (s === 0) continue; if (!sDir) sDir = s; if (s !== sDir) break; streak++; }
+    const iMaxIn = e.flow_m.indexOf(maxIn), iMaxOut = e.flow_m.indexOf(maxOut);
+    const hasFunds = !!D.etf_funds[a];
+
+    v.innerHTML = `
+      <div class="controls">
+        ${seg("etfAsset", ASSETS.map((x) => [x, x]), a)}
+        ${seg("etfRange", [[30, "30 sessions"], [90, "90"], [250, "1 year"], [0, "All"]], state.etfRange)}
+      </div>
+      <div><span class="eyebrow">US spot ${a} ETFs · ${e.date[0]} → ${e.date[e.date.length - 1]}</span><h2>${fmtM(sum)} net over ${flows.length} sessions</h2>
+      <p class="sub">Source: ${a === "BTC" || a === "ETH" ? "SoSoValue, with Farside for sessions before mid-2025" : "SoSoValue"}. Flows are creations minus redemptions in USD.</p></div>
+      <div class="stats">
+        <div class="stat"><div class="k">Inflow / outflow days</div><div class="v">${inD} / ${outD}</div></div>
+        <div class="stat"><div class="k">Largest inflow</div><div class="v">${fmtM(maxIn)}</div><div class="note">${e.date[iMaxIn] || ""}</div></div>
+        <div class="stat"><div class="k">Largest outflow</div><div class="v">${fmtM(maxOut)}</div><div class="note">${e.date[iMaxOut] || ""}</div></div>
+        <div class="stat"><div class="k">Current streak</div><div class="v">${streak} ${sDir > 0 ? "in" : sDir < 0 ? "out" : ""}</div></div>
+        <div class="stat"><div class="k">Assets (AUM)</div><div class="v">$${fmt(lastVal(e.aum_b), 2)}B</div></div>
+        <div class="stat"><div class="k">Cumulative since launch</div><div class="v">$${fmt(lastVal(e.cum_b), 2)}B</div></div>
+      </div>
+      <div class="grid two">
+        ${card("etf-daily", "Daily net flow", { cls: "tall", legend: legendItem(css("--inflow"), "Inflow", true) + legendItem(css("--outflow"), "Outflow", true) })}
+        ${card("etf-cum", "Cumulative net inflow since launch", { cls: "tall" })}
+      </div>
+      ${card("etf-aum", "Total assets under management", { cls: "short" })}
+      ${hasFunds ? `<div class="card"><div class="card-h"><h3>By fund, last 12 sessions ($M)</h3><span class="last">Farside</span></div><div class="tbl-wrap" id="etf-funds"></div></div>` : ""}
+      <div class="card"><div class="card-h"><h3>Daily table</h3><span class="last">latest first</span></div><div class="tbl-wrap" id="etf-table"></div></div>`;
+
+    polarityBars("etf-daily", e.date, e.flow_m, { yFmt: (x) => fmtM(x) });
+    line("etf-cum", e.date, [{ label: "Cumulative", data: e.cum_b, borderColor: css(SERIES[a]), backgroundColor: css(SERIES[a]) }], { yFmt: (x) => "$" + fmt(x, 2) + "B" });
+    $("#etf-cum-last").textContent = "$" + fmt(lastVal(e.cum_b), 2) + "B";
+    line("etf-aum", e.date, [{ label: "AUM", data: e.aum_b, borderColor: css("--ink-2"), backgroundColor: css("--ink-2") }], { yFmt: (x) => "$" + fmt(x, 2) + "B" });
+    $("#etf-aum-last").textContent = "$" + fmt(lastVal(e.aum_b), 2) + "B";
+
+    if (hasFunds) {
+      const F = D.etf_funds[a], dates = F.dates.slice(-12);
+      const tick = Object.keys(F.tickers).filter((t) => F.tickers[t].slice(-12).some((x) => isNum(x) && x !== 0));
+      tick.sort((x, y) => Math.abs(F.tickers[y].slice(-12).reduce((s, v) => s + (v || 0), 0)) - Math.abs(F.tickers[x].slice(-12).reduce((s, v) => s + (v || 0), 0)));
+      const cell = (x) => !isNum(x) ? `<td class="zero">–</td>` : `<td class="${x > 0 ? "pos" : x < 0 ? "neg" : "zero"}">${x === 0 ? "0" : (x > 0 ? "+" : "−") + fmt(Math.abs(x), 1)}</td>`;
+      $("#etf-funds").innerHTML = `<table><thead><tr><th>Date</th>${tick.map((t) => `<th>${t}</th>`).join("")}</tr></thead><tbody>${dates.slice().reverse().map((d) => {
+        const i = F.dates.indexOf(d); return `<tr><td>${d}</td>${tick.map((t) => cell(F.tickers[t][i])).join("")}</tr>`; }).join("")}</tbody></table>`;
+    }
+    const rows = e.date.map((d, i) => [d, e.flow_m[i], e.traded_m[i], e.aum_b[i], e.cum_b[i]]).reverse().slice(0, 60);
+    $("#etf-table").innerHTML = `<table><thead><tr><th>Date</th><th>Net flow</th><th>Value traded</th><th>AUM</th><th>Cumulative</th></tr></thead><tbody>${rows.map((r) =>
+      `<tr><td>${r[0]}</td><td class="${r[1] > 0 ? "pos" : r[1] < 0 ? "neg" : "zero"}">${fmtM(r[1])}</td><td>${isNum(r[2]) ? "$" + fmt(r[2], 0) + "M" : "–"}</td><td>${isNum(r[3]) ? "$" + fmt(r[3], 2) + "B" : "–"}</td><td>${isNum(r[4]) ? "$" + fmt(r[4], 2) + "B" : "–"}</td></tr>`).join("")}</tbody></table>`;
+  }
+
+  // ================================================================ BTC main chart (candles + cycle moving averages)
+  // Weekly averages are computed "as of" each day: the current week's bar uses that day's close,
+  // exactly what a live weekly chart shows at that moment, so there is no look-ahead on the daily view.
+  const BTC_LINES = [
+    { key: "sma20w", label: "20W SMA", color: "--s2", style: 0, on: true, group: "Bull market support band" },
+    { key: "ema21w", label: "21W EMA", color: "--s2", style: 2, on: true, group: "Bull market support band" },
+    { key: "sma50w", label: "50W SMA", color: "--s1", style: 0, on: true },
+    { key: "sma200w", label: "200W SMA", color: "--s7", style: 0, on: true },
+    { key: "sma50d", label: "50D SMA", color: "--s3", style: 0, on: false },
+    { key: "sma200d", label: "200D SMA", color: "--s5", style: 0, on: false },
+  ];
+  let btcChart = null;
+  const mondayOf = (iso) => { const d = new Date(iso + "T00:00:00Z"); const wd = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - wd); return d.toISOString().slice(0, 10); };
+  function btcSeries() {
+    const B = D.btc_ohlc, n = B.date.length;
+    // weekly bars (Monday-start)
+    const weeks = [], wIdx = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const wk = mondayOf(B.date[i]); let w = weeks[weeks.length - 1];
+      if (!w || w.time !== wk) { w = { time: wk, open: B.o[i], high: B.h[i], low: B.l[i], close: B.c[i] }; weeks.push(w); }
+      else { w.high = Math.max(w.high, B.h[i]); w.low = Math.min(w.low, B.l[i]); w.close = B.c[i]; }
+      wIdx[i] = weeks.length - 1;
+    }
+    const wc = weeks.map((w) => w.close);
+    // completed-week helpers
+    const smaW = (len, k, closeNow) => { if (k < len - 1) return null; let s = closeNow; for (let j = k - len + 1; j < k; j++) s += wc[j]; return s / len; };
+    const alpha = 2 / 22, emaDone = new Array(weeks.length).fill(null);   // EMA at end of each completed week
+    for (let k = 0; k < weeks.length; k++) {
+      if (k < 20) continue;
+      emaDone[k] = k === 20 ? wc.slice(0, 21).reduce((a, b) => a + b, 0) / 21 : emaDone[k - 1] * (1 - alpha) + wc[k] * alpha;
+    }
+    const daily = { sma20w: [], ema21w: [], sma50w: [], sma200w: [], sma50d: [], sma200d: [] };
+    let s50 = 0, s200 = 0;
+    for (let i = 0; i < n; i++) {
+      const t = B.date[i], k = wIdx[i], c = B.c[i];
+      const push = (key, val) => { if (isNum(val)) daily[key].push({ time: t, value: val }); };
+      push("sma20w", smaW(20, k, c)); push("sma50w", smaW(50, k, c)); push("sma200w", smaW(200, k, c));
+      push("ema21w", k > 20 && isNum(emaDone[k - 1]) ? emaDone[k - 1] * (1 - alpha) + c * alpha : null);
+      s50 += c; s200 += c; if (i >= 50) s50 -= B.c[i - 50]; if (i >= 200) s200 -= B.c[i - 200];
+      push("sma50d", i >= 49 ? s50 / 50 : null); push("sma200d", i >= 199 ? s200 / 200 : null);
+    }
+    const weekly = { sma20w: [], ema21w: [], sma50w: [], sma200w: [], sma50d: [], sma200d: [] };
+    for (let k = 0; k < weeks.length; k++) {
+      const t = weeks[k].time, p = (key, val) => { if (isNum(val)) weekly[key].push({ time: t, value: val }); };
+      p("sma20w", smaW(20, k, wc[k])); p("sma50w", smaW(50, k, wc[k])); p("sma200w", smaW(200, k, wc[k])); p("ema21w", emaDone[k]);
+    }
+    const candles = B.date.map((t, i) => ({ time: t, open: B.o[i], high: B.h[i], low: B.l[i], close: B.c[i] }));
+    return { candles, weeks, daily, weekly };
+  }
+  function renderBtcChart() {
+    const host = $("#btc-main"); if (!host || !window.LightweightCharts) return;
+    if (btcChart) { try { btcChart.remove(); } catch (e) {} btcChart = null; }
+    state.btcOn = state.btcOn || Object.fromEntries(BTC_LINES.map((l) => [l.key, l.on]));
+    const S = btcSeries(), weekly = state.btcTf === "1w";
+    const LC = window.LightweightCharts;
+    const chart = LC.createChart(host, {
+      autoSize: true,
+      layout: { background: { type: "solid", color: css("--panel") }, textColor: css("--ink-2"), fontFamily: "'IBM Plex Mono', ui-monospace, Menlo, monospace", fontSize: 11 },
+      grid: { vertLines: { visible: false }, horzLines: { color: css("--grid") } },
+      rightPriceScale: { borderColor: css("--rule"), mode: state.btcScale === "lin" ? 0 : 1 },
+      timeScale: { borderColor: css("--rule"), rightOffset: 4 },
+      crosshair: { mode: 0 },
+      localization: { locale: "en-US", priceFormatter: (x) => "$" + Math.round(x).toLocaleString("en-US"), dateFormat: "yyyy-MM-dd" },
+    });
+    btcChart = chart;
+    const up = css("--up"), down = css("--down");
+    const cs = chart.addCandlestickSeries({ upColor: up, downColor: down, wickUpColor: up, wickDownColor: down, borderVisible: false, priceLineVisible: false });
+    cs.setData(weekly ? S.weeks : S.candles);
+    const lines = {};
+    for (const l of BTC_LINES) {
+      if (weekly && l.key.endsWith("d")) continue;
+      const ls = chart.addLineSeries({ color: css(l.color), lineWidth: 2, lineStyle: l.style, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, visible: !!state.btcOn[l.key] });
+      ls.setData((weekly ? S.weekly : S.daily)[l.key]);
+      lines[l.key] = ls;
+    }
+    const last = S.candles[S.candles.length - 1].time;
+    if (Number(state.mktRange)) {
+      const from = new Date(new Date(last) - Number(state.mktRange) * 864e5).toISOString().slice(0, 10);
+      chart.timeScale().setVisibleRange({ from, to: last });
+    } else chart.timeScale().fitContent();
+
+    // hover readout
+    const out = $("#btc-readout");
+    const lastOf = (arr) => arr.length ? arr[arr.length - 1].value : null;
+    const show = (bar, vals, label) => {
+      out.innerHTML = `<span class="ro-d">${label}</span> O ${fmt(bar.open, 0)} H ${fmt(bar.high, 0)} L ${fmt(bar.low, 0)} <b>C ${fmt(bar.close, 0)}</b>` +
+        BTC_LINES.filter((l) => lines[l.key] && state.btcOn[l.key]).map((l) => `<span class="ro-m"><i style="background:var(${l.color})"></i>${l.label} ${fmt(vals[l.key], 0)}</span>`).join("");
+    };
+    const src = weekly ? S.weeks : S.candles, maSrc = weekly ? S.weekly : S.daily;
+    const latest = () => show(src[src.length - 1], Object.fromEntries(BTC_LINES.map((l) => [l.key, lastOf(maSrc[l.key])])), "Latest");
+    latest();
+    chart.subscribeCrosshairMove((p) => {
+      if (!p || !p.time) return latest();
+      const bar = p.seriesData.get(cs); if (!bar) return latest();
+      const vals = {}; for (const k in lines) { const d = p.seriesData.get(lines[k]); vals[k] = d ? d.value : null; }
+      show(bar, vals, typeof p.time === "string" ? p.time : "");
+    });
+    renderBtcToggles(lines, weekly);
+    renderBtcStats(S);
+  }
+  function renderBtcToggles(lines, weekly) {
+    $("#btc-toggles").innerHTML = BTC_LINES.filter((l) => !(weekly && l.key.endsWith("d"))).map((l) =>
+      `<button class="tgl" data-btcline="${l.key}" aria-pressed="${!!state.btcOn[l.key]}"><i style="background:var(${l.color})${l.style === 2 ? ";opacity:.7" : ""}"></i>${l.label}${l.group ? ` <span class="grp">BMSB</span>` : ""}</button>`).join("");
+    $("#btc-toggles").onclick = (ev) => {
+      const b = ev.target.closest("button[data-btcline]"); if (!b) return;
+      const k = b.dataset.btcline; state.btcOn[k] = !state.btcOn[k]; save();
+      b.setAttribute("aria-pressed", String(state.btcOn[k]));
+      if (lines[k]) lines[k].applyOptions({ visible: state.btcOn[k] });
+    };
+  }
+  function renderBtcStats(S) {
+    const c = S.candles[S.candles.length - 1].close, dv = (k) => { const a = S.daily[k]; return a.length ? a[a.length - 1].value : null; };
+    const s20 = dv("sma20w"), e21 = dv("ema21w"), s50 = dv("sma50w"), s200 = dv("sma200w"), d200 = dv("sma200d");
+    const bandLo = Math.min(s20, e21), bandHi = Math.max(s20, e21);
+    const status = c > bandHi ? ["Above the band", "up"] : c < bandLo ? ["Below the band", "down"] : ["Inside the band", ""];
+    const vs = (x) => isNum(x) ? sgn((c / x - 1) * 100, 1) : "–";
+    $("#btc-stats").innerHTML = `
+      <div class="stat"><div class="k">BTC close</div><div class="v">$${fmt(c, 0)}</div><div class="note">Bitstamp daily</div></div>
+      <div class="stat"><div class="k">Bull market support band</div><div class="v ${status[1]}">${status[0]}</div><div class="note">$${fmt(bandLo, 0)} – $${fmt(bandHi, 0)}</div></div>
+      <div class="stat"><div class="k">vs 20W SMA / 21W EMA</div><div class="v">${vs(s20)} / ${vs(e21)}</div></div>
+      <div class="stat"><div class="k">vs 50W SMA</div><div class="v">${vs(s50)}</div><div class="note">$${fmt(s50, 0)}</div></div>
+      <div class="stat"><div class="k">vs 200W SMA</div><div class="v">${vs(s200)}</div><div class="note">$${fmt(s200, 0)} · cycle floor</div></div>
+      <div class="stat"><div class="k">vs 200D SMA</div><div class="v">${vs(d200)}</div><div class="note">$${fmt(d200, 0)}</div></div>`;
+  }
+
+  // ================================================================ MARKET & MACRO
+  function corr(xs, ys) {
+    const p = []; for (let i = 0; i < xs.length; i++) if (isNum(xs[i]) && isNum(ys[i])) p.push([xs[i], ys[i]]);
+    if (p.length < 20) return null;
+    const mx = p.reduce((s, q) => s + q[0], 0) / p.length, my = p.reduce((s, q) => s + q[1], 0) / p.length;
+    let sxy = 0, sxx = 0, syy = 0; for (const [x, y] of p) { sxy += (x - mx) * (y - my); sxx += (x - mx) ** 2; syy += (y - my) ** 2; }
+    return sxy / Math.sqrt(sxx * syy);
+  }
+  function changes(arr, log = true) { // day-over-day change between consecutive valid observations
+    const out = new Array(arr.length).fill(null); let prev = null;
+    for (let i = 0; i < arr.length; i++) { if (!isNum(arr[i])) continue; if (prev !== null) out[i] = log ? Math.log(arr[i] / arr[prev]) : arr[i] - arr[prev]; prev = i; }
+    return out;
+  }
+  function renderMarket() {
+    const v = $("#view-market");
+    const M = D.macro, from = sinceDays(M.date, state.mktRange), m = cut(M, from);
+    state.btcTf = state.btcTf || "1d"; state.btcScale = state.btcScale || "log";
+    v.innerHTML = `
+      <div class="controls">
+        ${seg("mktRange", [[365, "1 year"], [1095, "3 years"], [0, "All"]], state.mktRange)}
+        ${seg("btcTf", [["1d", "Daily candles"], ["1w", "Weekly candles"]], state.btcTf)}
+        ${seg("btcScale", [["log", "Log"], ["lin", "Linear"]], state.btcScale)}
+      </div>
+      <div class="card main">
+        <div class="card-h"><h3>BTC / USD</h3><span class="last">drag to pan · scroll or pinch to zoom</span></div>
+        <div class="legend toggles" id="btc-toggles" role="group" aria-label="Moving averages"></div>
+        <div class="readout" id="btc-readout"></div>
+        <div class="chart main-chart" id="btc-main" role="img" aria-label="BTC candlestick chart with moving averages"></div>
+        <div class="stats" id="btc-stats"></div>
+        <div class="note"><b>Bull market support band</b> = 20-week SMA and 21-week EMA. In bull markets BTC tends to hold above it; losing it on a weekly close has often marked the turn. The <b>200-week SMA</b> has historically been the bear-market floor; the <b>50-week SMA</b> is the mid-cycle line to watch. Weekly averages on the daily chart are live as of each day.</div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>BTC dominance excluding stablecoins</h3><span class="last big" id="mk-dom-last"></span></div>
+        <div class="legend">${legendItem(css("--s1"), "Ex-stablecoins: BTC ÷ (total − stablecoins)")}${legendItem(css("--ink-3"), "Standard BTC.D, for reference")}</div>
+        <div class="chart tall"><canvas id="mk-dom" role="img" aria-label="BTC dominance excluding stablecoins"></canvas></div>
+        <div class="stats" id="dom-stats"></div>
+      </div>
+      <div><span class="eyebrow">Market structure</span><h2>Where crypto money sits</h2>
+      <p class="sub">TOTAL3 is total crypto market cap excluding BTC and ETH (TradingView). Stablecoin supply from DefiLlama.</p></div>
+      <div class="grid">
+        ${card("mk-t3", "TOTAL3 market cap")}
+        ${card("mk-st", "Stablecoin supply")}
+        ${card("mk-tot", "Total crypto market cap")}
+      </div>
+      <div><span class="eyebrow">Macro</span><h2>Rates, dollar and liquidity</h2>
+      <p class="sub">Each panel has its own scale over the same dates. Net liquidity is the Fed balance sheet minus the Treasury General Account minus reverse repo.</p></div>
+      <div class="grid">
+        ${card("mc-10y", "US 10Y yield")}
+        ${card("mc-dxy", "DXY dollar index")}
+        ${card("mc-nl", "Fed net liquidity")}
+        ${card("mc-spx", "S&amp;P 500")}
+        ${card("mc-vix", "VIX")}
+        ${card("mk-1h", "TOTAL3, hourly, last 30 days")}
+      </div>
+      <div class="card"><div class="card-h"><h3>Correlation of daily changes with BTC</h3><span class="last">log returns; yield change in bp</span></div>
+      <div class="tbl-wrap"><table class="corr" id="corr"></table></div>
+      <div class="note">Read +0.30 as "tends to move with BTC", −0.30 as "tends to move against it". Values near zero mean no reliable daily link. Correlations shift over time; compare the windows.</div></div>`;
+
+    renderBtcChart();
+    const L = m.date;
+    line("mk-dom", L, [
+      { label: "Ex-stablecoins", data: m.btc_d_ex, borderColor: css("--s1"), backgroundColor: css("--s1"), borderWidth: 2.5 },
+      { label: "Standard", data: m.btc_d, borderColor: css("--ink-3"), backgroundColor: css("--ink-3"), borderDash: [4, 3], borderWidth: 1.5 },
+    ], { yFmt: (x) => fmt(x, 1) + "%" });
+    const iD = lastIdx(M.btc_d_ex), dx = M.btc_d_ex[iD];
+    $("#mk-dom-last").textContent = fmt(dx, 2) + "%";
+    const chg = (n) => { const p = valAgo(M.btc_d_ex, iD, n); return isNum(p) ? dx - p : null; };
+    const rng = m.btc_d_ex.filter(isNum);
+    $("#dom-stats").innerHTML = [["1 week", chg(7)], ["1 month", chg(30)], ["3 months", chg(90)], ["1 year", chg(365)]].map(([k, c]) =>
+      `<div class="stat"><div class="k">Change ${k}</div><div class="v ${signCls(c)}">${sgn(c, 2, " pt")}</div></div>`).join("") +
+      `<div class="stat"><div class="k">Range in view</div><div class="v">${fmt(Math.min(...rng), 1)}–${fmt(Math.max(...rng), 1)}%</div></div>` +
+      `<div class="stat"><div class="k">Standard BTC.D</div><div class="v">${fmt(lastVal(M.btc_d), 2)}%</div></div>`;
+
+    const single = (id, data, color, f, lastTxt, labels = L) => { line(id, labels, [{ label: lastTxt || "", data, borderColor: color, backgroundColor: color }], { yFmt: f }); $("#" + id + "-last").textContent = f(lastVal(data)); };
+    single("mk-t3", m.total3_b, css("--s3"), (x) => "$" + fmt(x, 0) + "B", "TOTAL3");
+    single("mk-st", m.stables_b, css("--ink-2"), (x) => "$" + fmt(x, 0) + "B", "Stablecoins");
+    single("mk-tot", m.total_b.map((x) => isNum(x) ? x / 1000 : null), css("--ink-2"), (x) => "$" + fmt(x, 2) + "T", "Total");
+    single("mc-10y", m.us10y, css("--ink"), (x) => fmt(x, 2) + "%", "US10Y");
+    single("mc-dxy", m.dxy, css("--ink"), (x) => fmt(x, 2), "DXY");
+    single("mc-nl", m.netliq_t, css("--ink"), (x) => "$" + fmt(x, 2) + "T", "Net liquidity");
+    single("mc-spx", m.spx, css("--ink"), (x) => fmt(x, 0), "S&P 500");
+    single("mc-vix", m.vix, css("--ink"), (x) => fmt(x, 1), "VIX");
+    const H = D.market_1h;
+    single("mk-1h", H.total3_b, css("--s3"), (x) => "$" + fmt(x, 0) + "B", "TOTAL3", H.ts.map((t) => t.slice(5)));
+
+    const btcR = changes(M.btc), N = M.date.length;
+    const series = [["US 10Y yield", changes(M.us10y, false)], ["DXY", changes(M.dxy)], ["S&P 500", changes(M.spx)], ["VIX", changes(M.vix)], ["TOTAL3", changes(M.total3_b)], ["Net liquidity", changes(M.netliq_t, false)]];
+    const wins = [[30, "30d"], [90, "90d"], [365, "1y"]];
+    const cellColor = (c) => !isNum(c) ? "" : Math.abs(c) < .15 ? "zero" : c > 0 ? "pos" : "neg";
+    $("#corr").innerHTML = `<thead><tr><th>vs BTC</th>${wins.map((w) => `<th>${w[1]}</th>`).join("")}</tr></thead><tbody>${series.map(([name, s]) =>
+      `<tr><td>${name}</td>${wins.map(([w]) => { const c = corr(btcR.slice(N - w), s.slice(N - w)); return `<td class="cell ${cellColor(c)}">${isNum(c) ? (c > 0 ? "+" : c < 0 ? "−" : "") + fmt(Math.abs(c), 2) : "–"}</td>`; }).join("")}</tr>`).join("")}</tbody>`;
+  }
+
+
+  // ================================================================ DERIVATIVES
+  // One overlay chart: every series rescaled to 0–100 within the visible range (0 = its low, 100 = its high),
+  // so lines of very different units share one honest axis. Tooltips show the real values.
+  const DERIV_SERIES = [
+    { key: "price",       label: "Price",               color: "--ink", width: 2.5, fmt: (x) => fmtPx(x), on: true },
+    { key: "oi_b",        label: "Open interest",       color: "--s1", fmt: (x) => "$" + fmt(x, 2) + "B", on: true },
+    { key: "ls_accounts", label: "Long/short (accounts)", color: "--s2", fmt: (x) => fmt(x, 2), on: true },
+    { key: "ls_top",      label: "Long/short (top traders)", color: "--s3", fmt: (x) => fmt(x, 2), on: false, dailyOnly: true },
+    { key: "taker",       label: "Taker buy/sell",      color: "--s4", fmt: (x) => fmt(x, 2), on: false },
+    { key: "premium_bp",  label: "Perp premium",        color: "--s5", fmt: (x) => fmt(x, 1) + " bp", on: false },
+    { key: "basis_bp",    label: "Basis vs spot",       color: "--s7", fmt: (x) => fmt(x, 1) + " bp", on: false, dailyOnly: true },
+  ];
+  const rescale = (arr) => {
+    const v = arr.filter(isNum); if (!v.length) return arr.map(() => null);
+    const lo = Math.min(...v), hi = Math.max(...v), span = hi - lo || 1;
+    return arr.map((x) => isNum(x) ? ((x - lo) / span) * 100 : null);
+  };
+  function readFlow(p, o) {  // classic price/OI read
+    if (!isNum(p) || !isNum(o)) return "";
+    const P = p > 0.5 ? 1 : p < -0.5 ? -1 : 0, O = o > 1 ? 1 : o < -1 ? -1 : 0;
+    if (P > 0 && O > 0) return "Price up with rising OI: new positions are backing the move.";
+    if (P > 0 && O < 0) return "Price up while OI falls: shorts closing (short covering), less fresh conviction.";
+    if (P < 0 && O > 0) return "Price down with rising OI: new shorts opening, or longs adding into weakness.";
+    if (P < 0 && O < 0) return "Price down while OI falls: longs closing or being liquidated.";
+    if (O > 0) return "Price flat while OI builds: leverage is accumulating; watch for a breakout either way.";
+    if (O < 0) return "Price flat while OI drops: positions being cleared out.";
+    return "Price and OI both roughly flat.";
+  }
+  function renderDeriv() {
+    const v = $("#view-deriv");
+    const syms = Object.keys(D.deriv);
+    if (!D.deriv[state.derivSym]) state.derivSym = syms[0];
+    state.derivOn = state.derivOn || Object.fromEntries(DERIV_SERIES.map((s) => [s.key, s.on]));
+    const S = D.deriv[state.derivSym];
+    const hourly = state.derivRange === "14h";
+    let X;
+    if (hourly) X = S.hourly; else { const n = Number(state.derivRange); X = n ? cut(S.daily, Math.max(0, S.daily.date.length - n)) : S.daily; }
+    const L = hourly ? X.ts.map((t) => t.slice(5)) : X.date;
+    const asset = state.derivSym.replace("USDT", "");
+    const avail = DERIV_SERIES.filter((s) => X[s.key] && !(hourly && s.dailyOnly));
+
+    // summary over the visible range
+    const first = (a) => a.find(isNum), last = (a) => lastVal(a);
+    const pChg = pct(last(X.price), first(X.price)), oChg = pct(last(X.oi_b), first(X.oi_b));
+    const ls0 = first(X.ls_accounts), ls1 = last(X.ls_accounts);
+    const prem = last(X.premium_bp);
+
+    v.innerHTML = `
+      <div class="controls">
+        ${seg("derivSym", syms.map((s) => [s, s.replace("USDT", "")]), state.derivSym)}
+        ${seg("derivRange", [["14h", "14 days hourly"], ["90", "90 days"], ["365", "1 year"], ["0", "All"]], state.derivRange)}
+      </div>
+      <div><span class="eyebrow">Binance USDT-margined perpetual · ${L[0]} → ${L[L.length - 1]}${hourly ? " UTC" : ""}</span><h2>${asset} positioning</h2>
+      <p class="sub">Binance only, not the whole market.</p></div>
+      <div class="stats">
+        <div class="stat"><div class="k">Price over range</div><div class="v ${signCls(pChg)}">${sgn(pChg, 1)}</div><div class="note">${fmtPx(last(X.price))}</div></div>
+        <div class="stat"><div class="k">Open interest</div><div class="v ${signCls(oChg)}">${sgn(oChg, 1)}</div><div class="note">$${fmt(last(X.oi_b), 2)}B now</div></div>
+        <div class="stat"><div class="k">Long/short (accounts)</div><div class="v">${fmt(ls1, 2)}</div><div class="note">from ${fmt(ls0, 2)} · ${isNum(ls1) ? (ls1 > 1 ? "more accounts long" : "more accounts short") : ""}</div></div>
+        <div class="stat"><div class="k">Perp premium</div><div class="v">${fmt(prem, 1)} bp</div><div class="note">${isNum(prem) ? (prem > 6 ? "rich: funding above default" : prem < -4 ? "discount: funding below default" : "normal range") : ""}</div></div>
+      </div>
+      <div class="note"><b>Read:</b> ${readFlow(pChg, oChg)}</div>
+      <div class="card">
+        <div class="card-h"><h3>Overlay</h3><span class="last">each line scaled to its own low (0) and high (100) in this range · hover for real values</span></div>
+        <div class="legend toggles" role="group" aria-label="Series">${avail.map((s) =>
+          `<button class="tgl" data-series="${s.key}" aria-pressed="${!!state.derivOn[s.key]}"><i style="background:var(${s.color})"></i>${s.label}</button>`).join("")}</div>
+        <div class="chart xtall"><canvas id="dv-overlay" role="img" aria-label="${asset} price, open interest and positioning overlay"></canvas></div>
+      </div>
+      <details class="card" ${state.derivDetails ? "open" : ""} id="dv-details"><summary><h3 style="display:inline">Each series on its own scale</h3></summary>
+        <div class="grid" style="margin-top:10px">
+          ${card("dv-px", asset + " spot price")}
+          ${card("dv-oi", "Open interest (USD)")}
+          ${card("dv-ls", "Long/short ratio (accounts)")}
+          ${card("dv-prem", "Perp premium index", { note: "Premium of the perpetual over the spot index, in bp. Binance funding per 8h = premium + clamp(1 bp − premium, ±5 bp), so −4 to +6 bp still pays the default +1 bp to shorts." })}
+        </div>
+      </details>`;
+
+    // overlay
+    const o = baseOpts();
+    o.scales.y.min = 0; o.scales.y.max = 100;
+    o.scales.y.ticks.callback = (val) => (val === 0 ? "low" : val === 50 ? "mid" : val === 100 ? "high" : "");
+    o.scales.y.ticks.stepSize = 50; o.scales.y.ticks.maxTicksLimit = 3;
+    o.layout = { padding: { top: 6, bottom: 2 } };
+    o.plugins.tooltip.callbacks = { label: (ctx) => { const s = avail[ctx.datasetIndex]; return ` ${s.label}: ${s.fmt(X[s.key][ctx.dataIndex])}`; } };
+    draw("dv-overlay", { type: "line", options: o, data: { labels: L, datasets: avail.map((s) => ({
+      label: s.label, data: rescale(X[s.key]), hidden: !state.derivOn[s.key],
+      borderColor: css(s.color), backgroundColor: css(s.color), borderWidth: s.width || 1.75,
+      pointRadius: 0, pointHoverRadius: 4, tension: 0, spanGaps: true, fill: false, clip: 6,
+    })) } });
+
+    // detail small multiples (only drawn when opened, to keep things light)
+    const drawDetails = () => {
+      const color = SERIES[asset] ? css(SERIES[asset]) : css("--ink");
+      const one = (id, data, f, c = color) => { line(id, L, [{ label: "", data, borderColor: c, backgroundColor: c }], { yFmt: f }); $("#" + id + "-last").textContent = f(lastVal(data)); };
+      one("dv-px", X.price, fmtPx);
+      one("dv-oi", X.oi_b, (x) => "$" + fmt(x, 2) + "B");
+      one("dv-ls", X.ls_accounts, (x) => fmt(x, 2), css("--s2"));
+      polarityBars("dv-prem", L, X.premium_bp, { yFmt: (x) => fmt(x, 1) + " bp", label: "Premium" }); $("#dv-prem-last").textContent = fmt(lastVal(X.premium_bp), 2) + " bp";
+    };
+    const det = $("#dv-details");
+    if (det.open) drawDetails();
+    det.addEventListener("toggle", () => { state.derivDetails = det.open; save(); if (det.open) drawDetails(); });
+  }
+
+  document.addEventListener("click", (ev) => {
+    const b = ev.target.closest("button.tgl"); if (!b) return;
+    const k = b.dataset.series; state.derivOn[k] = !state.derivOn[k]; save();
+    b.setAttribute("aria-pressed", String(state.derivOn[k]));
+    const ch = charts["dv-overlay"]; if (!ch) return;
+    const ds = ch.data.datasets.find((d) => d.label === b.textContent.trim()); if (ds) { ds.hidden = !state.derivOn[k]; ch.update("none"); }
+  });
+
+  // ================================================================ shell
+  const renderers = { overview: renderOverview, etf: renderEtf, market: renderMarket, deriv: renderDeriv };
+  function show(view) {
+    state.view = view; save();
+    for (const b of document.querySelectorAll("nav.tabs button")) b.setAttribute("aria-selected", String(b.dataset.view === view));
+    for (const k in renderers) $("#view-" + k).hidden = k !== view;
+    if (D) renderers[view]();
+  }
+  document.addEventListener("click", (ev) => {
+    const tab = ev.target.closest("nav.tabs button"); if (tab) { history.replaceState(null, "", "#" + tab.dataset.view); show(tab.dataset.view); return; }
+    const b = ev.target.closest("button[data-seg]"); if (!b) return;
+    const k = b.dataset.seg; const raw = b.dataset.v;
+    state[k] = (k === "etfRange" || k === "mktRange") ? Number(raw) : raw; save(); renderers[state.view]();
+  });
+  const mq = matchMedia("(prefers-color-scheme: dark)");
+  const rerender = () => D && renderers[state.view]();
+  mq.addEventListener ? mq.addEventListener("change", rerender) : mq.addListener(rerender);
+  new MutationObserver(rerender).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  function footer() {
+    $("#footer").innerHTML = `<span class="eyebrow">Data freshness · last successful run per source (UTC)</span>
+      <div class="fresh">${D.freshness.map((f) => `<span class="pill" title="${f.status}">${f.source} ${f.last_run.slice(5)}${f.status === "ok" ? "" : " · " + f.status}</span>`).join("")}</div>
+      <div class="note">Snapshot of the local market-data-hub database. Sources: Binance, SoSoValue, Farside, TradingView, DefiLlama, FRED, Cboe, Nasdaq, Coin Metrics, alternative.me, Deribit, CoinGecko. Candlestick chart by <a href="https://www.tradingview.com/lightweight-charts/" target="_blank" rel="noopener">TradingView Lightweight Charts</a>. Not investment advice.</div>`;
+  }
+  const fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+  fontsReady.then(() => fetch("data.json", { cache: "no-store" })).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then((d) => {
+    D = d;
+    const lastEtf = D.etf.BTC.date[D.etf.BTC.date.length - 1];
+    $("#asof").textContent = `Snapshot ${D.generated_at} · ETF flows through ${lastEtf}`;
+    footer();
+    const h = location.hash.replace("#", "");
+    show(renderers[h] ? h : (renderers[state.view] ? state.view : "overview"));
+  }).catch((e) => {
+    $("#asof").textContent = "Snapshot unavailable";
+    $("#view-overview").innerHTML = `<div class="err"><h2>The data file didn't load</h2><p class="sub">The page couldn't read data.json (${e.message}). Ask Claude to refresh the dashboard, which republishes the data file.</p></div>`;
+  });
+})();
+</script>

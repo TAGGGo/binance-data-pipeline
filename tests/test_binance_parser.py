@@ -14,7 +14,7 @@ import io
 import zipfile
 import pandas as pd
 import numpy as np
-from market_data_parser import BinanceMarketDataParser
+from mdh.sources.binance.parser import BinanceMarketDataParser
 
 
 class TestBinanceMarketDataParser(unittest.TestCase):

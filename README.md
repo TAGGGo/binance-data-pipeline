@@ -1,117 +1,87 @@
-# Binance Market Data Pipeline (`market_data_parser.py`)
+# market-data-hub
 
-A robust, re-entrant, and multi-interval market data ingestion tool designed to pull comprehensive data from [Binance Vision](https://data.binance.vision).
+Collects crypto + macro market data from free sources into one local DuckDB file
+(`data/market.duckdb`) so dashboards and analysis run on **real stored numbers**.
 
-## Overview & Architecture
+| Area | What | Source |
+|---|---|---|
+| Crypto derivatives | Spot/perp OHLCV, open interest, long/short ratios, funding, mark/index price (1h) | Binance Vision archive + live API |
+| Spot ETF flows | BTC · ETH · SOL · XRP daily net flows, AUM, volume (per-fund for BTC/ETH) | SoSoValue API + seeded Farside history |
+| Market structure | TOTAL, TOTAL2, TOTAL3, BTC.D, ETH.D, USDT.D, USDC.D, OTHERS.D (daily since 2014, hourly rolling) | TradingView (`tvdatafeed`) |
+| Stablecoins | Total / USDT / USDC circulating supply | DefiLlama |
+| Rates & macro | 2Y/10Y/30Y, real yield, breakevens, Fed funds, dollar, Fed balance sheet, TGA, RRP, M2, VIX, HY spread, oil | FRED |
+| Intraday macro | DXY, US10Y, US02Y (daily since 2005, hourly rolling) | TradingView |
+| Equities | SPY QQQ IWM TLT GLD IBIT FBTC ETHA MSTR COIN NVDA HOOD | Nasdaq API |
+| On-chain | BTC/ETH price, market cap, realized cap, MVRV, active addresses, tx count, supply | Coin Metrics Community |
+| Sentiment / vol | Fear & Greed index, Deribit DVOL (BTC, ETH) | alternative.me, Deribit |
+| Snapshot | CoinGecko global market cap + dominance | CoinGecko |
 
-The script pulls and merges **6 daily market archives** per symbol into a unified, clean CSV file tailored for quantitative research and trading strategies:
-1. **Spot Klines (`spot_klines`)**: Open, High, Low, Close, Volume, Quote Volume, Trade Count, Taker Buy Base/Quote Volumes.
-2. **Futures UM Klines (`futures_klines`)**: USDT-Margined perpetual contract Klines.
-3. **Open Interest & Positioning Ratios (`metrics`)**: Open Interest, Top Trader Long/Short Ratios, Global Account Long/Short Ratios, Taker Volume Ratios.
-4. **Funding Rates (`premium_index`)**: Premium index OHLC and exact funding rates.
-5. **Mark Price Klines (`mark_price`)**: Mark price OHLC.
-6. **Index Price Klines (`index_price`)**: Underlying index price OHLC.
+Derived views: `v_etf_flows`, `v_crypto_market_daily` (incl. **BTC dominance ex-stablecoins**),
+`v_net_liquidity` (Fed assets − TGA − RRP), `v_macro_daily` (one wide row per day).
+Full column list: [docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md). Source notes & limits: [docs/SOURCES.md](docs/SOURCES.md).
 
-### Key Engineering Features
-* **Non-destructive Idempotence**: Uses exact index matching (`pandas.DataFrame.combine_first`). Re-running the pipeline will **only fill missing days or null cells**, preserving existing non-null data.
-* **Cross-Day Boundary Snapshot Matching**: Automatically fetches the tail of the previous day's metrics archive (`T-1`) to accurately populate bar open snapshots at `00:00:00`.
-* **Multi-Interval Support**: Supports any standard kline interval (`1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `6h`, `1d`). Outputs files using intuitive naming conventions: `symbol_interval.csv` (e.g. `zecusdt_30m.csv`, `zecusdt_1h.csv`).
-* **Meme Coin Prefix Resolution**: Dynamically maps UM Futures symbols requiring a `1000` prefix (e.g. `PEPEUSDT` -> `1000PEPEUSDT`) while querying standard tickers on spot endpoints.
+## Setup
 
----
-
-## Installation & Requirements
-
-Ensure you have Python 3.8+ and standard data science libraries installed:
 ```bash
-pip install requests urllib3 pandas numpy
+pip3 install -r requirements.txt
+cp .env.example .env        # add FRED_API_KEY and SOSOVALUE_API_KEY (both free)
+python3 -m mdh backfill     # first run: full history (Binance part takes a while)
 ```
 
----
+## Everyday use
 
-## Usage & Command-Line Examples
-
-### 1. Basic Single Symbol Sync (Default 5m Interval)
-Sync historical data for ZECUSDT starting from September 1, 2025 up to today. This generates `zecusdt_5m.csv`:
 ```bash
-python3 market_data_parser.py --symbols ZECUSDT --start-date 2025-09-01
+python3 -m mdh update                  # incremental update of everything
+python3 -m mdh update fred sosovalue   # just some sources
+python3 -m mdh status                  # row counts + first/last date per series, last run per source
+python3 -m mdh sql "SELECT * FROM v_macro_daily ORDER BY date DESC LIMIT 5"
+python3 -m mdh sources                 # list source names
 ```
 
-### 2. Multi-Symbol & Multi-Interval Backfill
-Pull 30-minute and 1-hour historical data for ZECUSDT, HYPEUSDT, and PEPEUSDT over a specific date range. This will create 6 files (`zecusdt_30m.csv`, `zecusdt_1h.csv`, `hypeusdt_30m.csv`, etc.):
+Hourly automatic updates on macOS: `scripts/install_scheduler.sh` (launchd; see the script header).
+
+The original Binance CLI still works: `python3 market_data_parser.py --symbols BTCUSDT --intervals 1h`
+(output now defaults to `data/raw/binance/`).
+
+## Dashboard
+
+`mdh/dashboard/page.html` is a static page that reads one data file, `data.json`, produced by
+
 ```bash
-python3 market_data_parser.py \
-  --symbols ZECUSDT HYPEUSDT PEPEUSDT \
-  --intervals 30m 1h \
-  --start-date 2026-01-01 \
-  --end-date 2026-06-25
+python3 -m mdh update && python3 -m mdh export     # -> data/dashboard/data.json
 ```
 
-### 3. Lightweight Daily & 4-Hour Macro Data for Portfolio Analysis
-Fetch higher timeframe bars (`4h` and `1d`) into a dedicated `./data/macro` folder:
-```bash
-python3 market_data_parser.py \
-  --symbols ZECUSDT BTCUSDT ETHUSDT \
-  --intervals 4h 1d \
-  --start-date 2024-01-01 \
-  --output-dir ./data/macro
+It is published as a private Claude artifact ("Market Data Hub"). To refresh it, ask Claude to
+refresh the dashboard: it runs the two commands above and republishes `data.json` to the same link.
+Pages: Overview, ETF flows, Market & macro, Derivatives (Binance).
+
+## Layout
+
+```
+mdh/
+  settings.py          what to collect (symbols, series) + per-host rate budgets
+  cli.py               `python3 -m mdh ...`
+  core/http.py         shared rate-limited client (pacing, retries, backoff, monthly quotas)
+  core/db.py           DuckDB upserts + ingest log
+  sources/             one module per provider (binance/, fred, nasdaq, tradingview, ...)
+  derived/views.sql    derived views (dominance ex-stables, net liquidity, macro daily)
+seeds/etf/             one-time ETF flow history that APIs don't serve for free (tracked in git)
+scripts/               probe_apis.py (health check), install_scheduler.sh
+tests/                 python3 -m unittest discover tests
+data/                  gitignored: market.duckdb, raw/binance/*.csv, state/
 ```
 
-### 4. Scheduled Daily Incremental Update (Cron / CI Job)
-Run without a start date or end date specified. If an existing CSV is present, the script checks existing dates, skips complete days instantaneously, and fetches only missing recent days:
-```bash
-python3 market_data_parser.py --symbols ZECUSDT --intervals 5m 1h --output-dir ./data
-```
+## Rate limits
 
-### 5. Force Overwrite / Re-parse Legacy CSVs
-If you upgraded from an older version of the parser (e.g., expanding from 12 columns to the full 38-column schema) or suspect corrupted local records, use `--force` to re-download and rebuild existing dates:
-```bash
-python3 market_data_parser.py \
-  --symbols ZECUSDT \
-  --intervals 5m \
-  --start-date 2026-06-01 \
-  --end-date 2026-06-24 \
-  --force
-```
+Every request goes through `mdh/core/http.py`: each host is paced at ~70% of its published
+limit (`HOST_RPM` in settings), 429/5xx/timeouts are retried with exponential backoff
+(honouring `Retry-After`, halving that host's budget after a 429), and hard monthly quotas
+(SoSoValue, CoinGecko) are counted in `data/state/http_quota.json` and never exceeded.
+A normal hourly `update` makes ~60 HTTP calls in total.
 
----
+## Adding things
 
-#### CLI Arguments Summary:
-* `--symbols`: List of symbols to process (default: `ZECUSDT`).
-* `--intervals`: Kline intervals to fetch (`1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `6h`, `1d`). Default is `5m`.
-* `--start-date`: Start date in `YYYY-MM-DD` format (default: `2025-09-01`).
-* `--end-date`: End date in `YYYY-MM-DD` format (defaults to current date).
-* `--output-dir`: Folder path where CSV files will be written (default: current directory `.`).
-* `--force`: Force re-download and re-parse even if the date is already complete in the existing CSV.
-
----
-
-### Python API Usage
-
-You can also import and execute the parser within your trading systems:
-```python
-from market_data_parser import BinanceMarketDataParser
-
-# Initialize parser for 1-hour ZECUSDT data
-parser = BinanceMarketDataParser(
-    symbol="ZECUSDT",
-    interval="1h",
-    start_date="2026-05-01",
-    end_date="2026-06-24",
-    output_dir="./data"
-)
-
-# Execute sync (returns combined DataFrame and execution summary stats)
-df, stats = parser.run()
-print(df.head())
-print("Execution summary:", stats)
-```
-
----
-
-## Running Verification & Unit Tests
-
-To verify pipeline logic, interval calculations, symbol resolution, and live compatibility with Binance Vision servers, run the test suite:
-```bash
-python3 test_market_data_parser.py
-```
+* New Binance symbol → append to `BINANCE_SYMBOLS` in `mdh/settings.py`, run `python3 -m mdh backfill binance`.
+* New FRED series / stock / TradingView symbol → add to the matching dict/list in settings, run `update`.
+* New provider → add `mdh/sources/<name>.py` with `run(ctx, full=False) -> {table: rows}` and register it
+  in `mdh/sources/__init__.py`.
