@@ -86,6 +86,16 @@ h2 { margin: 0; font-family: var(--f-display); font-stretch: 85%; font-weight: 7
 .chart.tall { height: 280px; }
 .chart.short { height: 150px; }
 .chart.xtall { height: 380px; }
+.card.main { gap: 10px; }
+.main-chart { height: 520px; }
+.readout { font: 500 11.5px/1.4 var(--f-data); color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 4px 14px; font-variant-numeric: tabular-nums; min-height: 1.4em; }
+.readout b { color: var(--ink); font-weight: 600; }
+.readout .ro-d { color: var(--ink); }
+.readout .ro-m { display: inline-flex; align-items: center; gap: 5px; }
+.readout .ro-m i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+.tgl .grp { font-size: 9.5px; letter-spacing: .06em; color: var(--ink-3); }
+.card-h .last.big { font: 700 20px/1 var(--f-display); font-stretch: 82%; color: var(--ink); }
+@media (max-width: 520px) { .main-chart { height: 380px; } }
 .toggles { gap: 6px; }
 .tgl { appearance: none; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); font: 500 12px/1 var(--f-data);
   padding: 6px 10px; border-radius: 99px; display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
@@ -149,6 +159,7 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <script>
 (() => {
   const ASSETS = ["BTC", "ETH", "SOL", "XRP"];
@@ -333,6 +344,131 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
       `<tr><td>${r[0]}</td><td class="${r[1] > 0 ? "pos" : r[1] < 0 ? "neg" : "zero"}">${fmtM(r[1])}</td><td>${isNum(r[2]) ? "$" + fmt(r[2], 0) + "M" : "–"}</td><td>${isNum(r[3]) ? "$" + fmt(r[3], 2) + "B" : "–"}</td><td>${isNum(r[4]) ? "$" + fmt(r[4], 2) + "B" : "–"}</td></tr>`).join("")}</tbody></table>`;
   }
 
+  // ================================================================ BTC main chart (candles + cycle moving averages)
+  // Weekly averages are computed "as of" each day: the current week's bar uses that day's close,
+  // exactly what a live weekly chart shows at that moment, so there is no look-ahead on the daily view.
+  const BTC_LINES = [
+    { key: "sma20w", label: "20W SMA", color: "--s2", style: 0, on: true, group: "Bull market support band" },
+    { key: "ema21w", label: "21W EMA", color: "--s2", style: 2, on: true, group: "Bull market support band" },
+    { key: "sma50w", label: "50W SMA", color: "--s1", style: 0, on: true },
+    { key: "sma200w", label: "200W SMA", color: "--s7", style: 0, on: true },
+    { key: "sma50d", label: "50D SMA", color: "--s3", style: 0, on: false },
+    { key: "sma200d", label: "200D SMA", color: "--s5", style: 0, on: false },
+  ];
+  let btcChart = null;
+  const mondayOf = (iso) => { const d = new Date(iso + "T00:00:00Z"); const wd = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - wd); return d.toISOString().slice(0, 10); };
+  function btcSeries() {
+    const B = D.btc_ohlc, n = B.date.length;
+    // weekly bars (Monday-start)
+    const weeks = [], wIdx = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const wk = mondayOf(B.date[i]); let w = weeks[weeks.length - 1];
+      if (!w || w.time !== wk) { w = { time: wk, open: B.o[i], high: B.h[i], low: B.l[i], close: B.c[i] }; weeks.push(w); }
+      else { w.high = Math.max(w.high, B.h[i]); w.low = Math.min(w.low, B.l[i]); w.close = B.c[i]; }
+      wIdx[i] = weeks.length - 1;
+    }
+    const wc = weeks.map((w) => w.close);
+    // completed-week helpers
+    const smaW = (len, k, closeNow) => { if (k < len - 1) return null; let s = closeNow; for (let j = k - len + 1; j < k; j++) s += wc[j]; return s / len; };
+    const alpha = 2 / 22, emaDone = new Array(weeks.length).fill(null);   // EMA at end of each completed week
+    for (let k = 0; k < weeks.length; k++) {
+      if (k < 20) continue;
+      emaDone[k] = k === 20 ? wc.slice(0, 21).reduce((a, b) => a + b, 0) / 21 : emaDone[k - 1] * (1 - alpha) + wc[k] * alpha;
+    }
+    const daily = { sma20w: [], ema21w: [], sma50w: [], sma200w: [], sma50d: [], sma200d: [] };
+    let s50 = 0, s200 = 0;
+    for (let i = 0; i < n; i++) {
+      const t = B.date[i], k = wIdx[i], c = B.c[i];
+      const push = (key, val) => { if (isNum(val)) daily[key].push({ time: t, value: val }); };
+      push("sma20w", smaW(20, k, c)); push("sma50w", smaW(50, k, c)); push("sma200w", smaW(200, k, c));
+      push("ema21w", k > 20 && isNum(emaDone[k - 1]) ? emaDone[k - 1] * (1 - alpha) + c * alpha : null);
+      s50 += c; s200 += c; if (i >= 50) s50 -= B.c[i - 50]; if (i >= 200) s200 -= B.c[i - 200];
+      push("sma50d", i >= 49 ? s50 / 50 : null); push("sma200d", i >= 199 ? s200 / 200 : null);
+    }
+    const weekly = { sma20w: [], ema21w: [], sma50w: [], sma200w: [], sma50d: [], sma200d: [] };
+    for (let k = 0; k < weeks.length; k++) {
+      const t = weeks[k].time, p = (key, val) => { if (isNum(val)) weekly[key].push({ time: t, value: val }); };
+      p("sma20w", smaW(20, k, wc[k])); p("sma50w", smaW(50, k, wc[k])); p("sma200w", smaW(200, k, wc[k])); p("ema21w", emaDone[k]);
+    }
+    const candles = B.date.map((t, i) => ({ time: t, open: B.o[i], high: B.h[i], low: B.l[i], close: B.c[i] }));
+    return { candles, weeks, daily, weekly };
+  }
+  function renderBtcChart() {
+    const host = $("#btc-main"); if (!host || !window.LightweightCharts) return;
+    if (btcChart) { try { btcChart.remove(); } catch (e) {} btcChart = null; }
+    state.btcOn = state.btcOn || Object.fromEntries(BTC_LINES.map((l) => [l.key, l.on]));
+    const S = btcSeries(), weekly = state.btcTf === "1w";
+    const LC = window.LightweightCharts;
+    const chart = LC.createChart(host, {
+      autoSize: true,
+      layout: { background: { type: "solid", color: css("--panel") }, textColor: css("--ink-2"), fontFamily: "'IBM Plex Mono', ui-monospace, Menlo, monospace", fontSize: 11 },
+      grid: { vertLines: { visible: false }, horzLines: { color: css("--grid") } },
+      rightPriceScale: { borderColor: css("--rule"), mode: state.btcScale === "lin" ? 0 : 1 },
+      timeScale: { borderColor: css("--rule"), rightOffset: 4 },
+      crosshair: { mode: 0 },
+      localization: { locale: "en-US", priceFormatter: (x) => "$" + Math.round(x).toLocaleString("en-US"), dateFormat: "yyyy-MM-dd" },
+    });
+    btcChart = chart;
+    const up = css("--up"), down = css("--down");
+    const cs = chart.addCandlestickSeries({ upColor: up, downColor: down, wickUpColor: up, wickDownColor: down, borderVisible: false, priceLineVisible: false });
+    cs.setData(weekly ? S.weeks : S.candles);
+    const lines = {};
+    for (const l of BTC_LINES) {
+      if (weekly && l.key.endsWith("d")) continue;
+      const ls = chart.addLineSeries({ color: css(l.color), lineWidth: 2, lineStyle: l.style, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, visible: !!state.btcOn[l.key] });
+      ls.setData((weekly ? S.weekly : S.daily)[l.key]);
+      lines[l.key] = ls;
+    }
+    const last = S.candles[S.candles.length - 1].time;
+    if (Number(state.mktRange)) {
+      const from = new Date(new Date(last) - Number(state.mktRange) * 864e5).toISOString().slice(0, 10);
+      chart.timeScale().setVisibleRange({ from, to: last });
+    } else chart.timeScale().fitContent();
+
+    // hover readout
+    const out = $("#btc-readout");
+    const lastOf = (arr) => arr.length ? arr[arr.length - 1].value : null;
+    const show = (bar, vals, label) => {
+      out.innerHTML = `<span class="ro-d">${label}</span> O ${fmt(bar.open, 0)} H ${fmt(bar.high, 0)} L ${fmt(bar.low, 0)} <b>C ${fmt(bar.close, 0)}</b>` +
+        BTC_LINES.filter((l) => lines[l.key] && state.btcOn[l.key]).map((l) => `<span class="ro-m"><i style="background:var(${l.color})"></i>${l.label} ${fmt(vals[l.key], 0)}</span>`).join("");
+    };
+    const src = weekly ? S.weeks : S.candles, maSrc = weekly ? S.weekly : S.daily;
+    const latest = () => show(src[src.length - 1], Object.fromEntries(BTC_LINES.map((l) => [l.key, lastOf(maSrc[l.key])])), "Latest");
+    latest();
+    chart.subscribeCrosshairMove((p) => {
+      if (!p || !p.time) return latest();
+      const bar = p.seriesData.get(cs); if (!bar) return latest();
+      const vals = {}; for (const k in lines) { const d = p.seriesData.get(lines[k]); vals[k] = d ? d.value : null; }
+      show(bar, vals, typeof p.time === "string" ? p.time : "");
+    });
+    renderBtcToggles(lines, weekly);
+    renderBtcStats(S);
+  }
+  function renderBtcToggles(lines, weekly) {
+    $("#btc-toggles").innerHTML = BTC_LINES.filter((l) => !(weekly && l.key.endsWith("d"))).map((l) =>
+      `<button class="tgl" data-btcline="${l.key}" aria-pressed="${!!state.btcOn[l.key]}"><i style="background:var(${l.color})${l.style === 2 ? ";opacity:.7" : ""}"></i>${l.label}${l.group ? ` <span class="grp">BMSB</span>` : ""}</button>`).join("");
+    $("#btc-toggles").onclick = (ev) => {
+      const b = ev.target.closest("button[data-btcline]"); if (!b) return;
+      const k = b.dataset.btcline; state.btcOn[k] = !state.btcOn[k]; save();
+      b.setAttribute("aria-pressed", String(state.btcOn[k]));
+      if (lines[k]) lines[k].applyOptions({ visible: state.btcOn[k] });
+    };
+  }
+  function renderBtcStats(S) {
+    const c = S.candles[S.candles.length - 1].close, dv = (k) => { const a = S.daily[k]; return a.length ? a[a.length - 1].value : null; };
+    const s20 = dv("sma20w"), e21 = dv("ema21w"), s50 = dv("sma50w"), s200 = dv("sma200w"), d200 = dv("sma200d");
+    const bandLo = Math.min(s20, e21), bandHi = Math.max(s20, e21);
+    const status = c > bandHi ? ["Above the band", "up"] : c < bandLo ? ["Below the band", "down"] : ["Inside the band", ""];
+    const vs = (x) => isNum(x) ? sgn((c / x - 1) * 100, 1) : "–";
+    $("#btc-stats").innerHTML = `
+      <div class="stat"><div class="k">BTC close</div><div class="v">$${fmt(c, 0)}</div><div class="note">Bitstamp daily</div></div>
+      <div class="stat"><div class="k">Bull market support band</div><div class="v ${status[1]}">${status[0]}</div><div class="note">$${fmt(bandLo, 0)} – $${fmt(bandHi, 0)}</div></div>
+      <div class="stat"><div class="k">vs 20W SMA / 21W EMA</div><div class="v">${vs(s20)} / ${vs(e21)}</div></div>
+      <div class="stat"><div class="k">vs 50W SMA</div><div class="v">${vs(s50)}</div><div class="note">$${fmt(s50, 0)}</div></div>
+      <div class="stat"><div class="k">vs 200W SMA</div><div class="v">${vs(s200)}</div><div class="note">$${fmt(s200, 0)} · cycle floor</div></div>
+      <div class="stat"><div class="k">vs 200D SMA</div><div class="v">${vs(d200)}</div><div class="note">$${fmt(d200, 0)}</div></div>`;
+  }
+
   // ================================================================ MARKET & MACRO
   function corr(xs, ys) {
     const p = []; for (let i = 0; i < xs.length; i++) if (isNum(xs[i]) && isNum(ys[i])) p.push([xs[i], ys[i]]);
@@ -349,60 +485,83 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
   function renderMarket() {
     const v = $("#view-market");
     const M = D.macro, from = sinceDays(M.date, state.mktRange), m = cut(M, from);
+    state.btcTf = state.btcTf || "1d"; state.btcScale = state.btcScale || "log";
     v.innerHTML = `
-      <div class="controls">${seg("mktRange", [[365, "1 year"], [1095, "3 years"], [0, "Since 2017"]], state.mktRange)}</div>
+      <div class="controls">
+        ${seg("mktRange", [[365, "1 year"], [1095, "3 years"], [0, "All"]], state.mktRange)}
+        ${seg("btcTf", [["1d", "Daily candles"], ["1w", "Weekly candles"]], state.btcTf)}
+        ${seg("btcScale", [["log", "Log"], ["lin", "Linear"]], state.btcScale)}
+      </div>
+      <div class="card main">
+        <div class="card-h"><h3>BTC / USD</h3><span class="last">drag to pan · scroll or pinch to zoom</span></div>
+        <div class="legend toggles" id="btc-toggles" role="group" aria-label="Moving averages"></div>
+        <div class="readout" id="btc-readout"></div>
+        <div class="chart main-chart" id="btc-main" role="img" aria-label="BTC candlestick chart with moving averages"></div>
+        <div class="stats" id="btc-stats"></div>
+        <div class="note"><b>Bull market support band</b> = 20-week SMA and 21-week EMA. In bull markets BTC tends to hold above it; losing it on a weekly close has often marked the turn. The <b>200-week SMA</b> has historically been the bear-market floor; the <b>50-week SMA</b> is the mid-cycle line to watch. Weekly averages on the daily chart are live as of each day.</div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>BTC dominance excluding stablecoins</h3><span class="last big" id="mk-dom-last"></span></div>
+        <div class="legend">${legendItem(css("--s1"), "Ex-stablecoins: BTC ÷ (total − stablecoins)")}${legendItem(css("--ink-3"), "Standard BTC.D, for reference")}</div>
+        <div class="chart tall"><canvas id="mk-dom" role="img" aria-label="BTC dominance excluding stablecoins"></canvas></div>
+        <div class="stats" id="dom-stats"></div>
+      </div>
       <div><span class="eyebrow">Market structure</span><h2>Where crypto money sits</h2>
-      <p class="sub">TOTAL3 is total crypto market cap excluding BTC and ETH (TradingView). Dominance ex-stables divides BTC market cap by total market cap minus all stablecoins (DefiLlama).</p></div>
-      <div class="grid two">
-        ${card("mk-dom", "BTC dominance", { legend: legendItem(css("--s1"), "Ex-stablecoins") + legendItem(css("--ink-3"), "Standard (BTC.D)") })}
+      <p class="sub">TOTAL3 is total crypto market cap excluding BTC and ETH (TradingView). Stablecoin supply from DefiLlama.</p></div>
+      <div class="grid">
         ${card("mk-t3", "TOTAL3 market cap")}
         ${card("mk-st", "Stablecoin supply")}
         ${card("mk-tot", "Total crypto market cap")}
       </div>
-      <div><span class="eyebrow">Macro</span><h2>BTC against rates, dollar and liquidity</h2>
+      <div><span class="eyebrow">Macro</span><h2>Rates, dollar and liquidity</h2>
       <p class="sub">Each panel has its own scale over the same dates. Net liquidity is the Fed balance sheet minus the Treasury General Account minus reverse repo.</p></div>
       <div class="grid">
-        ${card("mc-btc", "BTC price")}
         ${card("mc-10y", "US 10Y yield")}
         ${card("mc-dxy", "DXY dollar index")}
         ${card("mc-nl", "Fed net liquidity")}
         ${card("mc-spx", "S&amp;P 500")}
         ${card("mc-vix", "VIX")}
+        ${card("mk-1h", "TOTAL3, hourly, last 30 days")}
       </div>
       <div class="card"><div class="card-h"><h3>Correlation of daily changes with BTC</h3><span class="last">log returns; yield change in bp</span></div>
       <div class="tbl-wrap"><table class="corr" id="corr"></table></div>
-      <div class="note">Read +0.30 as "tends to move with BTC", −0.30 as "tends to move against it". Values near zero mean no reliable daily link. Correlations shift over time; compare the windows.</div></div>
-      ${card("mk-1h", "Last 30 days, hourly: TOTAL3", { cls: "short" })}`;
+      <div class="note">Read +0.30 as "tends to move with BTC", −0.30 as "tends to move against it". Values near zero mean no reliable daily link. Correlations shift over time; compare the windows.</div></div>`;
 
+    renderBtcChart();
     const L = m.date;
     line("mk-dom", L, [
-      { label: "Ex-stablecoins", data: m.btc_d_ex, borderColor: css("--s1"), backgroundColor: css("--s1") },
-      { label: "Standard", data: m.btc_d, borderColor: css("--ink-3"), backgroundColor: css("--ink-3"), borderDash: [4, 3] },
+      { label: "Ex-stablecoins", data: m.btc_d_ex, borderColor: css("--s1"), backgroundColor: css("--s1"), borderWidth: 2.5 },
+      { label: "Standard", data: m.btc_d, borderColor: css("--ink-3"), backgroundColor: css("--ink-3"), borderDash: [4, 3], borderWidth: 1.5 },
     ], { yFmt: (x) => fmt(x, 1) + "%" });
-    $("#mk-dom-last").textContent = fmt(lastVal(m.btc_d_ex), 2) + "% / " + fmt(lastVal(m.btc_d), 2) + "%";
-    const single = (id, data, color, f, lastTxt) => { line(id, L, [{ label: lastTxt || "", data, borderColor: color, backgroundColor: color }], { yFmt: f }); $("#" + id + "-last").textContent = f(lastVal(data)); };
+    const iD = lastIdx(M.btc_d_ex), dx = M.btc_d_ex[iD];
+    $("#mk-dom-last").textContent = fmt(dx, 2) + "%";
+    const chg = (n) => { const p = valAgo(M.btc_d_ex, iD, n); return isNum(p) ? dx - p : null; };
+    const rng = m.btc_d_ex.filter(isNum);
+    $("#dom-stats").innerHTML = [["1 week", chg(7)], ["1 month", chg(30)], ["3 months", chg(90)], ["1 year", chg(365)]].map(([k, c]) =>
+      `<div class="stat"><div class="k">Change ${k}</div><div class="v ${signCls(c)}">${sgn(c, 2, " pt")}</div></div>`).join("") +
+      `<div class="stat"><div class="k">Range in view</div><div class="v">${fmt(Math.min(...rng), 1)}–${fmt(Math.max(...rng), 1)}%</div></div>` +
+      `<div class="stat"><div class="k">Standard BTC.D</div><div class="v">${fmt(lastVal(M.btc_d), 2)}%</div></div>`;
+
+    const single = (id, data, color, f, lastTxt, labels = L) => { line(id, labels, [{ label: lastTxt || "", data, borderColor: color, backgroundColor: color }], { yFmt: f }); $("#" + id + "-last").textContent = f(lastVal(data)); };
     single("mk-t3", m.total3_b, css("--s3"), (x) => "$" + fmt(x, 0) + "B", "TOTAL3");
     single("mk-st", m.stables_b, css("--ink-2"), (x) => "$" + fmt(x, 0) + "B", "Stablecoins");
     single("mk-tot", m.total_b.map((x) => isNum(x) ? x / 1000 : null), css("--ink-2"), (x) => "$" + fmt(x, 2) + "T", "Total");
-    single("mc-btc", m.btc, css("--s1"), (x) => "$" + fmt(x, 0), "BTC");
     single("mc-10y", m.us10y, css("--ink"), (x) => fmt(x, 2) + "%", "US10Y");
     single("mc-dxy", m.dxy, css("--ink"), (x) => fmt(x, 2), "DXY");
     single("mc-nl", m.netliq_t, css("--ink"), (x) => "$" + fmt(x, 2) + "T", "Net liquidity");
     single("mc-spx", m.spx, css("--ink"), (x) => fmt(x, 0), "S&P 500");
     single("mc-vix", m.vix, css("--ink"), (x) => fmt(x, 1), "VIX");
+    const H = D.market_1h;
+    single("mk-1h", H.total3_b, css("--s3"), (x) => "$" + fmt(x, 0) + "B", "TOTAL3", H.ts.map((t) => t.slice(5)));
 
-    // correlation table on full history windows
     const btcR = changes(M.btc), N = M.date.length;
     const series = [["US 10Y yield", changes(M.us10y, false)], ["DXY", changes(M.dxy)], ["S&P 500", changes(M.spx)], ["VIX", changes(M.vix)], ["TOTAL3", changes(M.total3_b)], ["Net liquidity", changes(M.netliq_t, false)]];
     const wins = [[30, "30d"], [90, "90d"], [365, "1y"]];
     const cellColor = (c) => !isNum(c) ? "" : Math.abs(c) < .15 ? "zero" : c > 0 ? "pos" : "neg";
     $("#corr").innerHTML = `<thead><tr><th>vs BTC</th>${wins.map((w) => `<th>${w[1]}</th>`).join("")}</tr></thead><tbody>${series.map(([name, s]) =>
       `<tr><td>${name}</td>${wins.map(([w]) => { const c = corr(btcR.slice(N - w), s.slice(N - w)); return `<td class="cell ${cellColor(c)}">${isNum(c) ? (c > 0 ? "+" : c < 0 ? "−" : "") + fmt(Math.abs(c), 2) : "–"}</td>`; }).join("")}</tr>`).join("")}</tbody>`;
-
-    const H = D.market_1h;
-    line("mk-1h", H.ts.map((t) => t.slice(5)), [{ label: "TOTAL3", data: H.total3_b, borderColor: css("--s3"), backgroundColor: css("--s3") }], { yFmt: (x) => "$" + fmt(x, 0) + "B" });
-    $("#mk-1h-last").textContent = "$" + fmt(lastVal(H.total3_b), 0) + "B · " + (H.ts[H.ts.length - 1] || "") + " UTC";
   }
+
 
   // ================================================================ DERIVATIVES
   // One overlay chart: every series rescaled to 0–100 within the visible range (0 = its low, 100 = its high),
@@ -537,7 +696,7 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
   function footer() {
     $("#footer").innerHTML = `<span class="eyebrow">Data freshness · last successful run per source (UTC)</span>
       <div class="fresh">${D.freshness.map((f) => `<span class="pill" title="${f.status}">${f.source} ${f.last_run.slice(5)}${f.status === "ok" ? "" : " · " + f.status}</span>`).join("")}</div>
-      <div class="note">Snapshot of the local market-data-hub database. Sources: Binance, SoSoValue, Farside, TradingView, DefiLlama, FRED, Cboe, Nasdaq, Coin Metrics, alternative.me, Deribit, CoinGecko. Not investment advice.</div>`;
+      <div class="note">Snapshot of the local market-data-hub database. Sources: Binance, SoSoValue, Farside, TradingView, DefiLlama, FRED, Cboe, Nasdaq, Coin Metrics, alternative.me, Deribit, CoinGecko. Candlestick chart by <a href="https://www.tradingview.com/lightweight-charts/" target="_blank" rel="noopener">TradingView Lightweight Charts</a>. Not investment advice.</div>`;
   }
   const fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
   fontsReady.then(() => fetch("data.json", { cache: "no-store" })).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then((d) => {

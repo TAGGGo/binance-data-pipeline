@@ -88,6 +88,7 @@ TV_SYMBOLS = [
     ("CRYPTOCAP", "BTC.D"), ("CRYPTOCAP", "ETH.D"), ("CRYPTOCAP", "OTHERS.D"),
     ("CRYPTOCAP", "USDT.D"), ("CRYPTOCAP", "USDC.D"),
     ("TVC", "DXY"), ("TVC", "US10Y"), ("TVC", "US02Y"),
+    ("BITSTAMP", "BTCUSD"),   # long BTC OHLC history (2011+) for candles and weekly moving averages
 ]
 TV_INTERVALS = ["1d", "1h"]   # daily = full history; hourly = rolling ~2 months, accumulated going forward
 

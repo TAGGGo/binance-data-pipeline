@@ -75,6 +75,10 @@ def build(con) -> dict:
                     "dxy", "spx", "vix", "netliq_t", "fg", "mvrv"],
                    {"btc": 1, "eth": 2, "total_b": 1, "total3_b": 1, "btc_d": 2, "btc_d_ex": 2, "stables_b": 1,
                     "us10y": 3, "us2y": 3, "dxy": 3, "spx": 1, "vix": 2, "netliq_t": 3, "mvrv": 3})
+    # BTC daily candles (Bitstamp via TradingView, 2013+) for the main price chart and its moving averages
+    d["btc_ohlc"] = q(con, """SELECT CAST(ts AS DATE), open, high, low, close FROM tv_bars
+                              WHERE symbol='BITSTAMP:BTCUSD' AND interval='1d' ORDER BY ts""",
+                      ["date", "o", "h", "l", "c"], {"o": 2, "h": 2, "l": 2, "c": 2})
     # hourly market structure (rolling ~2 months)
     d["market_1h"] = q(con, """SELECT ts,
             max(close) FILTER (WHERE symbol='CRYPTOCAP:TOTAL3')/1e9, max(close) FILTER (WHERE symbol='CRYPTOCAP:BTC.D'),
