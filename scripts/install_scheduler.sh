@@ -7,7 +7,8 @@ set -euo pipefail
 LABEL="com.market-data-hub.update"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-PY="$(command -v python3)"
+# prefer the repo virtualenv if there is one (python3 -m venv .venv)
+if [[ -x "$REPO/.venv/bin/python3" ]]; then PY="$REPO/.venv/bin/python3"; else PY="$(command -v python3)"; fi
 
 if [[ "${1:-}" == "uninstall" ]]; then
   launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
