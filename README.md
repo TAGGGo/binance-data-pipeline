@@ -43,6 +43,18 @@ Hourly automatic updates on macOS: `scripts/install_scheduler.sh` (launchd; see 
 The original Binance CLI still works: `python3 market_data_parser.py --symbols BTCUSDT --intervals 1h`
 (output now defaults to `data/raw/binance/`).
 
+## Dashboard
+
+`mdh/dashboard/page.html` is a static page that reads one data file, `data.json`, produced by
+
+```bash
+python3 -m mdh update && python3 -m mdh export     # -> data/dashboard/data.json
+```
+
+It is published as a private Claude artifact ("Market Data Hub"). To refresh it, ask Claude to
+refresh the dashboard: it runs the two commands above and republishes `data.json` to the same link.
+Pages: Overview, ETF flows, Market & macro, Derivatives (Binance).
+
 ## Layout
 
 ```

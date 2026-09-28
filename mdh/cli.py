@@ -7,6 +7,7 @@ mdh — market data hub CLI
   python3 -m mdh sql "SELECT ..."        run a query against data/market.duckdb
   python3 -m mdh views                   rebuild derived views
   python3 -m mdh docs                    regenerate docs/DATA_DICTIONARY.md
+  python3 -m mdh export                  write data/dashboard/data.json for the dashboard page
   python3 -m mdh sources                 list source names
 """
 from __future__ import annotations
@@ -160,6 +161,7 @@ def main(argv=None) -> int:
     sub.add_parser("views")
     sub.add_parser("docs")
     sub.add_parser("sources")
+    sub.add_parser("export")
     p = sub.add_parser("sql")
     p.add_argument("query")
     a = ap.parse_args(argv)
@@ -176,6 +178,10 @@ def main(argv=None) -> int:
         return 0
     if a.cmd == "docs":
         return cmd_docs()
+    if a.cmd == "export":
+        from mdh.dashboard import export
+        print(export.run())
+        return 0
     if a.cmd == "sources":
         from mdh import sources
         print("\n".join(sources.ALL))
