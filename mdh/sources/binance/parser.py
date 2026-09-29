@@ -68,7 +68,7 @@ class BinanceMarketDataParser:
         self.file_path = os.path.join(self.output_dir, self.filename)
 
         self.start_date = pd.to_datetime(start_date).normalize()
-        self.end_date = pd.to_datetime(end_date or pd.Timestamp.utcnow().tz_localize(None)).normalize()
+        self.end_date = pd.to_datetime(end_date or pd.Timestamp.now("UTC").tz_localize(None)).normalize()
         self.base_url = "https://data.binance.vision/data"
 
         self.data_types = data_types or [
@@ -82,7 +82,7 @@ class BinanceMarketDataParser:
 
         # Calculate interval frequency and expected periods per day
         self.freq = self._interval_to_freq(self.interval)
-        self.periods_per_day = max(1, int(pd.Timedelta("1d") / pd.Timedelta(self.freq)))
+        self.periods_per_day = max(1, int(pd.Timedelta("1D") / pd.Timedelta(self.freq)))
 
         # Setup resilient HTTP session
         self.session = requests.Session()
@@ -483,7 +483,7 @@ class BinanceMarketDataParser:
         main_df = pd.DataFrame()
         if os.path.exists(self.file_path):
             main_df = pd.read_csv(self.file_path)
-            main_df['timestamp'] = pd.to_datetime(main_df['timestamp'])
+            main_df['timestamp'] = pd.to_datetime(main_df['timestamp']).astype('datetime64[ns]')
 
         stats = {
             "total_days": 0,
@@ -491,7 +491,7 @@ class BinanceMarketDataParser:
             "days_fetched_and_merged": 0
         }
 
-        today = pd.Timestamp.utcnow().tz_localize(None).normalize()
+        today = pd.Timestamp.now("UTC").tz_localize(None).normalize()
         target_range = pd.date_range(start=self.start_date, end=self.end_date, freq="D")
         for date_obj in target_range:
             stats["total_days"] += 1
@@ -551,6 +551,10 @@ class BinanceMarketDataParser:
                         break
 
                 if df_part is not None and not df_part.empty:
+                    # pandas 3 keeps the parsed resolution (ms from epoch, us from strings); merge keys
+                    # must share one unit, so normalise both sides to nanoseconds
+                    df_part['timestamp'] = pd.to_datetime(df_part['timestamp']).astype('datetime64[ns]')
+                    day_grid['timestamp'] = pd.to_datetime(day_grid['timestamp']).astype('datetime64[ns]')
                     if d_type == "metrics":
                         freq_delta = pd.Timedelta(self.freq)
                         tolerance = min(freq_delta / 2, pd.Timedelta('15min'))
@@ -589,7 +593,7 @@ class BinanceMarketDataParser:
             stats["days_fetched_and_merged"] += 1
             main_df = self._sort_and_order_columns(main_df)
             # Trim future rows to keep the CSV clean
-            now_utc = pd.Timestamp.utcnow().tz_localize(None)
+            now_utc = pd.Timestamp.now("UTC").tz_localize(None)
             main_df = main_df[main_df['timestamp'] <= now_utc]
             # atomic write: an interrupted run can never leave a truncated CSV behind
             tmp_path = self.file_path + ".tmp"
