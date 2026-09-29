@@ -135,7 +135,7 @@ def build(con) -> dict:
                             ["date", "bp"], {"bp": 2})
         if exists("v_coinbase_premium_1h"):
             x["cbp_1h"] = q(con, f"""SELECT ts, premium_bp FROM v_coinbase_premium_1h WHERE symbol='{a}'
-                                     AND ts >= (SELECT max(ts) FROM v_coinbase_premium_1h) - INTERVAL 14 DAY ORDER BY ts""",
+                                     AND ts >= (SELECT max(ts) FROM v_coinbase_premium_1h) - INTERVAL 180 DAY ORDER BY ts""",
                             ["ts", "bp"], {"bp": 2})
         if exists("v_oi_daily_by_venue"):
             x["oi"] = pivot(f"""SELECT date, venue, oi_usd/1e9 FROM v_oi_daily_by_venue WHERE symbol='{a}'
