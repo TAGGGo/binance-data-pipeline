@@ -38,6 +38,9 @@ if [[ "$VPN_MODE" == "binance" ]]; then
   elif vpn_connected; then
     log "VPN already connected; leaving it as is"
   else
+    # MDH_VPN_LOCATION may be an exact region id (japan-tokyo) or just a prefix (japan): take the first match
+    REGION="$("$CTL" get regions 2>/dev/null | grep -i "^${VPN_LOCATION}" | head -1)"
+    VPN_LOCATION="${REGION:-$VPN_LOCATION}"
     log "connecting ExpressVPN ($VPN_LOCATION)"
     "$CTL" connect "$VPN_LOCATION" >/dev/null 2>&1 &
     for _ in $(seq 1 30); do sleep 2; vpn_connected && break; done
