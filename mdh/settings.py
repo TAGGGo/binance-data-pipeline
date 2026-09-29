@@ -45,6 +45,7 @@ HOST_RPM = {
     "api.bybit.com": 120,                  # 600 req / 5 s per IP
     "api.hyperliquid.xyz": 40,             # 1200 weight/min; history calls weigh ~20
     "publicreporting.cftc.gov": 30,
+    "api.upbit.com": 300,                  # 10 req/s per IP for candles
 }
 # hard monthly ceilings (published quota minus a safety margin)
 MONTHLY_QUOTA = {
@@ -96,6 +97,7 @@ TV_SYMBOLS = [
     ("CRYPTOCAP", "USDT.D"), ("CRYPTOCAP", "USDC.D"),
     ("TVC", "DXY"), ("TVC", "US10Y"), ("TVC", "US02Y"),
     ("BITSTAMP", "BTCUSD"),   # long BTC OHLC history (2011+) for candles and weekly moving averages
+    ("FX_IDC", "USDKRW"),     # USD/KRW for the Kimchi premium
 ]
 TV_INTERVALS = ["1d", "1h"]   # daily = full history; hourly = rolling ~2 months, accumulated going forward
 

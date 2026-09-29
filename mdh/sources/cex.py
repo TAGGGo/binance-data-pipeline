@@ -336,3 +336,46 @@ class binance_funding:
                                     "funding_rate": df["fundingRate"].astype(float), "interval_hours": 8.0})
                 total += db.upsert(ctx.con, "deriv_funding", out, ["venue", "symbol", "ts"])
         return {"deriv_funding": total}
+
+
+# ============================================================================ Upbit (Korea) spot, KRW markets
+class upbit:
+    """KRW candles from Upbit (no key; 10 req/s). Used for the Kimchi premium and Korean spot volume.
+    Stored in cex_spot with prices in KRW; volume_quote = traded value in KRW."""
+    NAME = "upbit"
+    BASE = "https://api.upbit.com/v1/candles"
+    PATH = {"1d": "days", "1h": "minutes/60"}
+    START = {"1d": "2017-09-25", "1h": "2024-08-01"}
+
+    @staticmethod
+    def run(ctx, full=False):
+        total = 0
+        for asset in ASSETS + ["USDT"]:
+            for interval, path in upbit.PATH.items():
+                last = None if full else _last_ts(ctx.con, "cex_spot", "venue='upbit' AND symbol=? AND interval=?", [asset, interval])
+                stop = pd.Timestamp(upbit.START[interval]) if last is None else last - pd.Timedelta(hours=3 if interval == "1h" else 72)
+                rows, to = [], None
+                for _ in range(200):   # 200 candles per call, newest first, page back with `to`
+                    params = {"market": f"KRW-{asset}", "count": 200}
+                    if to:
+                        params["to"] = to
+                    data = ctx.http.get_json(f"{upbit.BASE}/{path}", params=params)
+                    if not isinstance(data, list) or not data:
+                        break
+                    rows += data
+                    oldest = pd.Timestamp(data[-1]["candle_date_time_utc"])
+                    if oldest <= stop or len(data) < 200:
+                        break
+                    to = oldest.strftime("%Y-%m-%dT%H:%M:%S")
+                if not rows:
+                    continue
+                df = pd.DataFrame(rows)
+                out = pd.DataFrame({"venue": "upbit", "symbol": asset, "interval": interval,
+                                    "ts": pd.to_datetime(df["candle_date_time_utc"]),
+                                    "open": df["opening_price"].astype(float), "high": df["high_price"].astype(float),
+                                    "low": df["low_price"].astype(float), "close": df["trade_price"].astype(float),
+                                    "volume": df["candle_acc_trade_volume"].astype(float),
+                                    "volume_quote": df["candle_acc_trade_price"].astype(float)})
+                out = out[out["ts"] >= pd.Timestamp(upbit.START[interval])]
+                total += db.upsert(ctx.con, "cex_spot", out, ["venue", "symbol", "interval", "ts"])
+        return {"cex_spot": total}

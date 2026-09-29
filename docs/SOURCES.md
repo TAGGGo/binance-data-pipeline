@@ -24,6 +24,8 @@ Tested 2026-09-28. All free. Keys live in `.env` (gitignored).
 | Bybit (`api.bybit.com`) | no | 600 / 5 s | 120/min | OI and funding back to 2020–21 | **403 from US IPs** — runs in the VPN step. |
 | Hyperliquid (`api.hyperliquid.xyz`) | no | 1200 weight/min | 40/min | funding 2023-05+; OI none | OI snapshotted every run. Funding is hourly (scaled ×8 to compare). |
 | CFTC TFF (`publicreporting.cftc.gov`) | no | — | 30/min | BTC 2018+, ETH 2021+, SOL/XRP 2025+ | Weekly CME positioning (as of Tuesday). |
+| Upbit (`api.upbit.com`) | no | 10 req/s (candles) | 300/min | KRW daily 2017-09+, hourly 2024-08+ | Korean spot; Kimchi and Tether premium, Korean volume. |
+| TradingView FX_IDC:USDKRW | no | — | shared TV pacing | daily 2007+, hourly ~10 months | FX for the Kimchi premium. |
 
 ## Definitions
 
@@ -36,3 +38,5 @@ Tested 2026-09-28. All free. Keys live in `.env` (gitignored).
 * **Coinbase premium** = Coinbase USD close / (Binance USDT close × Coinbase USDT-USD) − 1, in bp. Completed hours/days only.
 * **Tracked OI** = Binance USDT-M + OKX (all contracts) + Bybit USDT perp + Hyperliquid. Not the whole market.
 * **Funding (8h bp)** = daily average funding rate × 8 / funding interval hours, in basis points.
+* **Kimchi premium** = Upbit KRW close / (Binance USDT close × USD/KRW) − 1, in %. **Tether premium** = Upbit USDT-KRW / USD/KRW − 1.
+* **Spot volume** = base volume × close (Binance, Coinbase); Upbit KRW traded value ÷ USD/KRW.

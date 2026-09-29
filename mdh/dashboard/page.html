@@ -17,7 +17,7 @@
   --inflow: #2a78d6;      /* diverging pole: inflow */
   --outflow: #e34948;     /* diverging pole: outflow */
   --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;  /* BTC ETH SOL XRP */
-  --s5: #e87ba4; --s7: #4a3aa7;
+  --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7;
   --grid: rgba(14,22,33,.07);
   --chip: #eef1f5;
   --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
@@ -28,14 +28,14 @@
   :root:not([data-theme="light"]) {
     --bg: #0e1116; --panel: #161a21; --ink: #eef1f5; --ink-2: #a3acb9; --ink-3: #6f7886; --rule: #252b34;
     --accent: #3987e5; --up: #2fb573; --down: #e66767; --inflow: #3987e5; --outflow: #e66767;
-    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s7: #9085e9;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9;
     --grid: rgba(238,241,245,.07); --chip: #1f252e; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0e1116; --panel: #161a21; --ink: #eef1f5; --ink-2: #a3acb9; --ink-3: #6f7886; --rule: #252b34;
   --accent: #3987e5; --up: #2fb573; --down: #e66767; --inflow: #3987e5; --outflow: #e66767;
-  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s7: #9085e9;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9;
   --grid: rgba(238,241,245,.07); --chip: #1f252e; color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -411,7 +411,7 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
       layout: { background: { type: "solid", color: css("--panel") }, textColor: css("--ink-2"), fontFamily: "'IBM Plex Mono', ui-monospace, Menlo, monospace", fontSize: 11 },
       grid: { vertLines: { visible: false }, horzLines: { color: css("--grid") } },
       rightPriceScale: { borderColor: css("--rule"), mode: state.btcScale === "lin" ? 0 : 1 },
-      timeScale: { borderColor: css("--rule"), rightOffset: 4 },
+      timeScale: { borderColor: css("--rule"), rightOffset: 4, minBarSpacing: 0.05 },
       crosshair: { mode: 0 },
       localization: { locale: "en-US", priceFormatter: (x) => "$" + Math.round(x).toLocaleString("en-US"), dateFormat: "yyyy-MM-dd" },
     });
@@ -419,6 +419,15 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
     const up = css("--up"), down = css("--down");
     const cs = chart.addCandlestickSeries({ upColor: up, downColor: down, wickUpColor: up, wickDownColor: down, borderVisible: false, priceLineVisible: false });
     cs.setData(weekly ? S.weeks : S.candles);
+    // volume pane: BTC spot volume across Binance + Coinbase + Upbit (USD)
+    if (D.btc_vol && D.btc_vol.date.length) {
+      const vs = chart.addHistogramSeries({ priceScaleId: "vol", priceFormat: { type: "volume" }, priceLineVisible: false, lastValueVisible: false, color: css("--ink-3") });
+      chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 }, visible: false });
+      let vdata = D.btc_vol.date.map((t, i) => ({ time: t, value: D.btc_vol.b[i] })).filter((x) => isNum(x.value));
+      if (weekly) { const agg = {}; for (const x of vdata) { const w = mondayOf(x.time); agg[w] = (agg[w] || 0) + x.value; } vdata = Object.keys(agg).sort().map((w) => ({ time: w, value: agg[w] })); }
+      vs.setData(vdata.map((x) => ({ ...x, color: css("--ink-3") })));
+      S.vol = Object.fromEntries(vdata.map((x) => [x.time, x.value]));
+    }
     const lines = {};
     for (const l of BTC_LINES) {
       if (weekly && l.key.endsWith("d")) continue;
@@ -436,7 +445,8 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
     const out = $("#btc-readout");
     const lastOf = (arr) => arr.length ? arr[arr.length - 1].value : null;
     const show = (bar, vals, label) => {
-      out.innerHTML = `<span class="ro-d">${label}</span> O ${fmt(bar.open, 0)} H ${fmt(bar.high, 0)} L ${fmt(bar.low, 0)} <b>C ${fmt(bar.close, 0)}</b>` +
+      const vol = S.vol ? S.vol[bar.time] : null;
+      out.innerHTML = `<span class="ro-d">${label}</span> O ${fmt(bar.open, 0)} H ${fmt(bar.high, 0)} L ${fmt(bar.low, 0)} <b>C ${fmt(bar.close, 0)}</b>` + (isNum(vol) ? ` <span class="ro-m">Vol $${fmt(vol, 2)}B</span>` : "") +
         BTC_LINES.filter((l) => lines[l.key] && state.btcOn[l.key]).map((l) => `<span class="ro-m"><i style="background:var(${l.color})"></i>${l.label} ${fmt(vals[l.key], 0)}</span>`).join("");
     };
     const src = weekly ? S.weeks : S.candles, maSrc = weekly ? S.weekly : S.daily;
@@ -477,20 +487,101 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
   }
 
   // ================================================================ Coinbase premium
+  const lwCharts = {};
+  function premiumChart(hostId, readoutId, src, { hourly, unit, dec, win, zero = true, extra } = {}) {
+    const host = $("#" + hostId);
+    if (lwCharts[hostId]) { try { lwCharts[hostId].remove(); } catch (e) {} delete lwCharts[hostId]; }
+    if (!window.LightweightCharts || !host) return;
+    const LC = window.LightweightCharts;
+    const chart = LC.createChart(host, {
+      autoSize: true,
+      layout: { background: { type: "solid", color: css("--panel") }, textColor: css("--ink-2"), fontFamily: "'IBM Plex Mono', ui-monospace, Menlo, monospace", fontSize: 11 },
+      grid: { vertLines: { visible: false }, horzLines: { color: css("--grid") } },
+      rightPriceScale: { borderColor: css("--rule") },
+      timeScale: { borderColor: css("--rule"), rightOffset: 3, timeVisible: !!hourly, secondsVisible: false, minBarSpacing: 0.05 },
+      crosshair: { mode: 0 },
+      localization: { locale: "en-US", priceFormatter: (x) => x.toFixed(dec) + unit, dateFormat: "yyyy-MM-dd" },
+    });
+    lwCharts[hostId] = chart;
+    const toTime = (t) => hourly ? Math.floor(Date.parse(t.replace(" ", "T") + "Z") / 1000) : t;
+    const inC = css("--inflow"), outC = css("--outflow");
+    const bars = [], avg = []; let sum = 0; const q = [];
+    for (let i = 0; i < src.t.length; i++) {
+      const v = src.v[i]; if (!isNum(v)) continue;
+      const time = toTime(src.t[i]);
+      bars.push({ time, value: v, color: v >= 0 ? inC : outC });
+      q.push(v); sum += v; if (q.length > win) sum -= q.shift();
+      if (q.length === win) avg.push({ time, value: sum / win });
+    }
+    const hs = chart.addHistogramSeries({ priceLineVisible: false, lastValueVisible: false, base: 0 });
+    hs.setData(bars);
+    const ls = chart.addLineSeries({ color: css("--ink"), lineWidth: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+    ls.setData(avg);
+    let es = null;
+    if (extra) {   // optional comparison line (e.g. Tether premium)
+      const ed = []; for (let i = 0; i < extra.t.length; i++) if (isNum(extra.v[i])) ed.push({ time: toTime(extra.t[i]), value: extra.v[i] });
+      es = chart.addLineSeries({ color: css(extra.color), lineWidth: 1.5, lineStyle: 0, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+      es.setData(ed);
+    }
+    if (zero) hs.createPriceLine({ price: 0, color: css("--ink-3"), lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
+    const lastT = bars.length ? bars[bars.length - 1].time : null;
+    if (lastT !== null) {
+      if (hourly) chart.timeScale().setVisibleRange({ from: lastT - 30 * 86400, to: lastT });
+      else if (Number(state.mktRange)) chart.timeScale().setVisibleRange({ from: new Date(new Date(lastT) - Number(state.mktRange) * 864e5).toISOString().slice(0, 10), to: lastT });
+      else chart.timeScale().fitContent();
+    }
+    const out = $("#" + readoutId);
+    const f = (v) => isNum(v) ? (v > 0 ? "+" : "") + fmt(v, dec + 1) + unit : "–";
+    const fmtT = (t) => typeof t === "number" ? new Date(t * 1000).toISOString().slice(0, 16).replace("T", " ") + " UTC" : t;
+    const show = (t, v, m, e) => { out.innerHTML = `<span class="ro-d">${fmtT(t)}</span> <b class="${signCls(v)}">${f(v)}</b> <span class="ro-m"><i style="background:var(--ink)"></i>${win}${hourly ? "h" : "d"} avg ${f(m)}</span>` +
+      (extra ? ` <span class="ro-m"><i style="background:var(${extra.color})"></i>${extra.label} ${f(e)}</span>` : ""); };
+    const latest = () => show(lastT, bars.length ? bars[bars.length - 1].value : null, avg.length ? avg[avg.length - 1].value : null, null);
+    latest();
+    chart.subscribeCrosshairMove((pp) => {
+      if (!pp || pp.time === undefined) return latest();
+      const b = pp.seriesData.get(hs), m = pp.seriesData.get(ls), e = es ? pp.seriesData.get(es) : null;
+      show(pp.time, b ? b.value : null, m ? m.value : null, e ? e.value : null);
+    });
+  }
+  const meanLast = (arr, n) => { const v = arr.slice(-n).filter(isNum); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
   function renderCbPremium() {
     const a = state.cbAsset || "BTC", X = D.xc && D.xc[a];
     if (!X || !X.cbp_1d) { $("#cbp-card").hidden = true; return; }
-    const from = sinceDays(X.cbp_1d.date, state.mktRange), d = cut(X.cbp_1d, from);
-    polarityBars("cbp-daily", d.date, d.bp, { yFmt: (x) => fmt(x, 1) + " bp", label: "Premium" });
-    const h = X.cbp_1h || { ts: [], bp: [] };
-    polarityBars("cbp-hourly", h.ts.map((t) => t.slice(5)), h.bp, { yFmt: (x) => fmt(x, 1) + " bp", label: "Premium (hourly)" });
-    const avg = (arr, n) => { const v = arr.slice(-n).filter(isNum); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
-    const lastH = lastVal(h.bp), last1d = lastVal(X.cbp_1d.bp);
+    const hourly = (state.cbTf || "1d") === "1h" && X.cbp_1h && X.cbp_1h.ts.length;
+    const src = hourly ? { t: X.cbp_1h.ts, v: X.cbp_1h.bp } : { t: X.cbp_1d.date, v: X.cbp_1d.bp };
+    premiumChart("cbp-chart", "cbp-readout", src, { hourly, unit: " bp", dec: 1, win: hourly ? 24 : 7 });
+    const lastH = X.cbp_1h ? lastVal(X.cbp_1h.bp) : null, last1d = lastVal(X.cbp_1d.bp);
     $("#cbp-last").textContent = (isNum(lastH) ? fmt(lastH, 1) : fmt(last1d, 1)) + " bp";
     const pos = X.cbp_1d.bp.slice(-30).filter((x) => isNum(x) && x > 0).length;
-    $("#cbp-stats").innerHTML = [["Latest hour", lastH], ["Yesterday", last1d], ["7-day avg", avg(X.cbp_1d.bp, 7)], ["30-day avg", avg(X.cbp_1d.bp, 30)]]
+    $("#cbp-stats").innerHTML = [["Latest hour", lastH], ["Yesterday", last1d], ["7-day avg", meanLast(X.cbp_1d.bp, 7)], ["30-day avg", meanLast(X.cbp_1d.bp, 30)]]
       .map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v ${signCls(v)}">${isNum(v) ? (v > 0 ? "+" : "") + fmt(v, 1) + " bp" : "–"}</div></div>`).join("") +
       `<div class="stat"><div class="k">Positive days, last 30</div><div class="v">${pos} / 30</div></div>`;
+  }
+  function renderKimchi() {
+    const a = state.kpAsset || "BTC", X = D.xc && D.xc[a];
+    if (!X || !X.kp_1d) { $("#kp-card").hidden = true; return; }
+    const hourly = (state.kpTf || "1d") === "1h" && X.kp_1h && X.kp_1h.ts.length;
+    const T = D.tether_kp;
+    const src = hourly ? { t: X.kp_1h.ts, v: X.kp_1h.pct } : { t: X.kp_1d.date, v: X.kp_1d.pct };
+    const extra = T ? { label: "Tether premium", color: "--s4", ...(hourly ? { t: T.h.ts, v: T.h.pct } : { t: T.d.date, v: T.d.pct }) } : null;
+    premiumChart("kp-chart", "kp-readout", src, { hourly, unit: "%", dec: 2, win: hourly ? 24 : 7, extra });
+    const lastH = X.kp_1h ? lastVal(X.kp_1h.pct) : null, last1d = lastVal(X.kp_1d.pct);
+    $("#kp-last").textContent = (isNum(lastH) ? fmt(lastH, 2) : fmt(last1d, 2)) + "%";
+    const pc = (v) => isNum(v) ? (v > 0 ? "+" : "") + fmt(v, 2) + "%" : "–";
+    const hi = Math.max(...X.kp_1d.pct.slice(-365).filter(isNum));
+    $("#kp-stats").innerHTML = [["Latest hour", lastH], ["Yesterday", last1d], ["7-day avg", meanLast(X.kp_1d.pct, 7)], ["30-day avg", meanLast(X.kp_1d.pct, 30)], ["Tether premium", T ? lastVal(T.h.pct) : null]]
+      .map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v ${signCls(v)}">${pc(v)}</div></div>`).join("") +
+      `<div class="stat"><div class="k">1-year high</div><div class="v">${pc(hi)}</div></div>`;
+    // spot volume by exchange (same asset)
+    if (X.spot_vol) {
+      const V = cut(X.spot_vol, sinceDays(X.spot_vol.date, Math.min(Number(state.mktRange) || 400, 400)));
+      const venues = [["binance", "Binance", "--s1"], ["coinbase", "Coinbase", "--s2"], ["upbit", "Upbit", "--s3"]];
+      stackedBars("sv-chart", V.date, venues.map(([k, l, c]) => ({ label: l, data: V[k], backgroundColor: css(c) })), { yFmt: (x) => "$" + fmt(x, 2) + "B" });
+      const tot = (k) => { const v = V[k].slice(-30).filter(isNum); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
+      const all = venues.reduce((s2, [k]) => s2 + (tot(k) || 0), 0);
+      $("#sv-legend").innerHTML = venues.map(([k, l, c]) => legendItem(css(c), `${l} $${fmt(tot(k), 2)}B/day · ${all ? fmt(100 * (tot(k) || 0) / all, 0) : "–"}%`, true)).join("");
+      $("#sv-title").textContent = `${a} spot volume by exchange`;
+    }
   }
 
   // ================================================================ Across exchanges (Derivatives tab)
@@ -556,7 +647,7 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
         <div class="readout" id="btc-readout"></div>
         <div class="chart main-chart" id="btc-main" role="img" aria-label="BTC candlestick chart with moving averages"></div>
         <div class="stats" id="btc-stats"></div>
-        <div class="note"><b>Bull market support band</b> = 20-week SMA and 21-week EMA. In bull markets BTC tends to hold above it; losing it on a weekly close has often marked the turn. The <b>200-week SMA</b> has historically been the bear-market floor; the <b>50-week SMA</b> is the mid-cycle line to watch. Weekly averages on the daily chart are live as of each day.</div>
+        <div class="note">Grey bars at the bottom: BTC spot volume on Binance + Coinbase + Upbit (USD). <b>Bull market support band</b> = 20-week SMA and 21-week EMA. In bull markets BTC tends to hold above it; losing it on a weekly close has often marked the turn. The <b>200-week SMA</b> has historically been the bear-market floor; the <b>50-week SMA</b> is the mid-cycle line to watch. Weekly averages on the daily chart are live as of each day.</div>
       </div>
       <div class="card">
         <div class="card-h"><h3>BTC dominance excluding stablecoins</h3><span class="last big" id="mk-dom-last"></span></div>
@@ -566,11 +657,27 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
       </div>
       <div class="card" id="cbp-card">
         <div class="card-h"><h3>Coinbase premium</h3><span class="last big" id="cbp-last"></span></div>
-        <div class="controls">${seg("cbAsset", ["BTC", "ETH", "SOL", "XRP"].map((x) => [x, x]), state.cbAsset || "BTC")}</div>
-        <div class="chart tall"><canvas id="cbp-daily" role="img" aria-label="Coinbase premium, daily"></canvas></div>
+        <div class="controls">${seg("cbAsset", ["BTC", "ETH", "SOL", "XRP"].map((x) => [x, x]), state.cbAsset || "BTC")}
+          ${seg("cbTf", [["1d", "Daily"], ["1h", "Hourly"]], state.cbTf || "1d")}<span class="last">drag to pan · scroll or pinch to zoom</span></div>
+        <div class="readout" id="cbp-readout"></div>
+        <div class="chart tall" id="cbp-chart" role="img" aria-label="Coinbase premium"></div>
         <div class="stats" id="cbp-stats"></div>
-        <div class="chart short"><canvas id="cbp-hourly" role="img" aria-label="Coinbase premium, hourly, last 14 days"></canvas></div>
-        <div class="note">Coinbase USD price vs Binance USDT price (converted to USD with Coinbase's USDT/USD), in basis points. <b>Positive</b> = US buyers paying more than offshore buyers, often alongside ETF inflows. Bars are daily; the lower chart is hourly for the last 14 days.</div>
+        <div class="note">Coinbase USD price vs Binance USDT price (converted to USD with Coinbase's USDT/USD), in basis points. <b>Positive</b> = US buyers paying more than offshore buyers, often alongside ETF inflows. The line is the 7-day (daily view) or 24-hour (hourly view) average. Hourly history covers the last 180 days.</div>
+      </div>
+      <div class="card" id="kp-card">
+        <div class="card-h"><h3>Kimchi premium (Upbit)</h3><span class="last big" id="kp-last"></span></div>
+        <div class="controls">${seg("kpAsset", ["BTC", "ETH", "SOL", "XRP"].map((x) => [x, x]), state.kpAsset || "BTC")}
+          ${seg("kpTf", [["1d", "Daily"], ["1h", "Hourly"]], state.kpTf || "1d")}<span class="last">drag to pan · scroll or pinch to zoom</span></div>
+        <div class="readout" id="kp-readout"></div>
+        <div class="chart tall" id="kp-chart" role="img" aria-label="Kimchi premium"></div>
+        <div class="stats" id="kp-stats"></div>
+        <div class="note">Upbit KRW price vs Binance USDT price converted at the USD/KRW rate, in percent. <b>High positive</b> (several %) = Korean retail chasing, historically common near local tops (spring 2021 hit ~20%). The yellow line is the <b>Tether premium</b>: USDT on Upbit vs USD/KRW, a pure measure of Korean demand for crypto dollars.</div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3 id="sv-title">Spot volume by exchange</h3><span class="last">daily, USD · 30-day average share</span></div>
+        <div class="legend" id="sv-legend"></div>
+        <div class="chart tall"><canvas id="sv-chart" role="img" aria-label="Spot volume by exchange"></canvas></div>
+        <div class="note">Binance and Coinbase in their own quote currency; Upbit converted from KRW. Follows the asset picked in the Kimchi premium card.</div>
       </div>
       <div><span class="eyebrow">Market structure</span><h2>Where crypto money sits</h2>
       <p class="sub">TOTAL3 is total crypto market cap excluding BTC and ETH (TradingView). Stablecoin supply from DefiLlama.</p></div>
@@ -595,6 +702,7 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
 
     renderBtcChart();
     renderCbPremium();
+    renderKimchi();
     const L = m.date;
     line("mk-dom", L, [
       { label: "Ex-stablecoins", data: m.btc_d_ex, borderColor: css("--s1"), backgroundColor: css("--s1"), borderWidth: 2.5 },
@@ -641,6 +749,7 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
     { key: "taker",       label: "Taker buy/sell",      color: "--s4", fmt: (x) => fmt(x, 2), on: false },
     { key: "premium_bp",  label: "Perp premium",        color: "--s5", fmt: (x) => fmt(x, 1) + " bp", on: false },
     { key: "basis_bp",    label: "Basis vs spot",       color: "--s7", fmt: (x) => fmt(x, 1) + " bp", on: false, dailyOnly: true },
+    { key: "vol",         label: "Futures volume",      color: "--s6", fmt: (x) => "$" + fmt(x, 2) + "B", on: false },
   ];
   const rescale = (arr) => {
     const v = arr.filter(isNum); if (!v.length) return arr.map(() => null);

@@ -98,17 +98,18 @@ def build(con) -> dict:
                 avg(futures_close/spot_close - 1)*1e4,
                 last(count_long_short_ratio ORDER BY "timestamp"),
                 last(sum_toptrader_long_short_ratio ORDER BY "timestamp"),
-                avg(sum_taker_long_short_vol_ratio)
+                avg(sum_taker_long_short_vol_ratio),
+                sum(futures_quote_volume)/1e9
             FROM binance_1h WHERE symbol='{s}' GROUP BY 1 HAVING count(*) >= 20 ORDER BY 1  -- skip partial days
             """,
-                  ["date", "price", "oi_b", "premium_bp", "basis_bp", "ls_accounts", "ls_top", "taker"],
-                  {"price": 4, "oi_b": 4, "premium_bp": 2, "basis_bp": 2, "ls_accounts": 3, "ls_top": 3, "taker": 3})
+                  ["date", "price", "oi_b", "premium_bp", "basis_bp", "ls_accounts", "ls_top", "taker", "vol"],
+                  {"price": 4, "oi_b": 4, "premium_bp": 2, "basis_bp": 2, "ls_accounts": 3, "ls_top": 3, "taker": 3, "vol": 3})
         hourly = q(con, f"""SELECT "timestamp", spot_close, sum_open_interest_value/1e9, funding_rate*1e4,
-                                   count_long_short_ratio, sum_taker_long_short_vol_ratio
+                                   count_long_short_ratio, sum_taker_long_short_vol_ratio, futures_quote_volume/1e9
                             FROM binance_1h WHERE symbol='{s}'
                               AND "timestamp" >= (SELECT max("timestamp") FROM binance_1h WHERE symbol='{s}') - INTERVAL 14 DAY
-                            ORDER BY 1""", ["ts", "price", "oi_b", "premium_bp", "ls_accounts", "taker"],
-                   {"price": 4, "oi_b": 4, "premium_bp": 2, "ls_accounts": 3, "taker": 3})
+                            ORDER BY 1""", ["ts", "price", "oi_b", "premium_bp", "ls_accounts", "taker", "vol"],
+                   {"price": 4, "oi_b": 4, "premium_bp": 2, "ls_accounts": 3, "taker": 3, "vol": 4})
         deriv[s] = {"daily": daily, "hourly": hourly}
     d["deriv"] = deriv
 
@@ -147,8 +148,21 @@ def build(con) -> dict:
             x["cme"] = q(con, f"""SELECT report_date, oi_coins, lev_funds_net_coins, asset_mgr_net_coins
                                   FROM v_cme_positioning WHERE asset='{a}' ORDER BY report_date""",
                          ["date", "oi", "lev_net", "am_net"], {"oi": 1, "lev_net": 1, "am_net": 1})
+        if exists("v_kimchi_premium_1d"):
+            x["kp_1d"] = q(con, f"SELECT date, premium_pct FROM v_kimchi_premium_1d WHERE symbol='{a}' ORDER BY date", ["date", "pct"], {"pct": 3})
+            x["kp_1h"] = q(con, f"""SELECT ts, premium_pct FROM v_kimchi_premium_1h WHERE symbol='{a}'
+                                    AND ts >= (SELECT max(ts) FROM v_kimchi_premium_1h) - INTERVAL 180 DAY ORDER BY ts""", ["ts", "pct"], {"pct": 3})
+        if exists("v_spot_volume_daily"):
+            x["spot_vol"] = pivot(f"""SELECT date, venue, volume_usd/1e9 FROM v_spot_volume_daily WHERE symbol='{a}'
+                                      AND date >= current_date - 400 ORDER BY date""", "v", ["binance", "coinbase", "upbit"])
         xc[a] = x
     d["xc"] = xc
+    if exists("v_kimchi_premium_1d"):
+        d["tether_kp"] = {"d": q(con, "SELECT date, premium_pct FROM v_kimchi_premium_1d WHERE symbol='USDT' ORDER BY date", ["date", "pct"], {"pct": 3}),
+                          "h": q(con, """SELECT ts, premium_pct FROM v_kimchi_premium_1h WHERE symbol='USDT'
+                                         AND ts >= (SELECT max(ts) FROM v_kimchi_premium_1h) - INTERVAL 180 DAY ORDER BY ts""", ["ts", "pct"], {"pct": 3})}
+    if exists("v_spot_volume_daily"):   # BTC spot volume across Binance + Coinbase + Upbit, for the candle chart
+        d["btc_vol"] = q(con, "SELECT date, sum(volume_usd)/1e9 FROM v_spot_volume_daily WHERE symbol='BTC' GROUP BY 1 ORDER BY 1", ["date", "b"], {"b": 3})
 
     # ------------------------------------------------------------ freshness per source (for the footer)
     d["freshness"] = [

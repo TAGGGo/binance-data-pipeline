@@ -157,3 +157,47 @@ SELECT report_date, asset,
        sum((dealer_long - dealer_short) * units_per_contract) AS dealer_net_coins
 FROM cftc_crypto GROUP BY 1, 2
 ORDER BY 1, 2
+;;
+
+-- Kimchi premium: Upbit KRW price vs Binance USDT price converted at USD/KRW (TradingView FX_IDC), in percent.
+-- Hourly uses the hourly FX rate when available (Dec 2025+), otherwise the daily rate. Completed periods only.
+CREATE OR REPLACE VIEW v_kimchi_premium_1h AS
+WITH up  AS (SELECT symbol, ts, close FROM cex_spot WHERE venue = 'upbit' AND interval = '1h'),
+     bn  AS (SELECT replace(symbol, 'USDT', '') AS symbol, "timestamp" AS ts, spot_close FROM binance_1h),
+     fxh AS (SELECT ts, close AS fx FROM tv_bars WHERE symbol = 'FX_IDC:USDKRW' AND interval = '1h'),
+     fxd AS (SELECT ts, close AS fx FROM tv_bars WHERE symbol = 'FX_IDC:USDKRW' AND interval = '1d'),
+     a   AS (SELECT up.symbol, up.ts, up.close, fxh.fx AS fx_h FROM up ASOF LEFT JOIN fxh ON up.ts >= fxh.ts),
+     b   AS (SELECT a.*, fxd.fx AS fx_d FROM a ASOF LEFT JOIN fxd ON a.ts >= fxd.ts),
+     c   AS (SELECT symbol, ts, close AS upbit_krw,
+                    CASE WHEN fx_h IS NOT NULL AND ts >= (SELECT min(ts) FROM fxh) THEN fx_h ELSE fx_d END AS usdkrw FROM b)
+SELECT c.symbol, c.ts, c.upbit_krw, c.usdkrw, bn.spot_close AS binance_usdt,
+       CASE WHEN c.symbol = 'USDT' THEN (c.upbit_krw / c.usdkrw - 1) * 100
+            ELSE (c.upbit_krw / (bn.spot_close * c.usdkrw) - 1) * 100 END AS premium_pct
+FROM c LEFT JOIN bn ON bn.symbol = c.symbol AND bn.ts = c.ts
+WHERE c.ts < date_trunc('hour', now()::TIMESTAMP) - INTERVAL 1 HOUR
+  AND (c.symbol = 'USDT' OR bn.spot_close IS NOT NULL)
+ORDER BY c.symbol, c.ts
+;;
+
+CREATE OR REPLACE VIEW v_kimchi_premium_1d AS
+WITH up  AS (SELECT symbol, ts, close FROM cex_spot WHERE venue = 'upbit' AND interval = '1d'),
+     bn  AS (SELECT symbol, ts, close FROM cex_spot WHERE venue = 'binance' AND interval = '1d'),
+     fxd AS (SELECT ts, close AS fx FROM tv_bars WHERE symbol = 'FX_IDC:USDKRW' AND interval = '1d'),
+     a   AS (SELECT up.symbol, up.ts, up.close, fxd.fx FROM up ASOF LEFT JOIN fxd ON up.ts >= fxd.ts)
+SELECT a.symbol, CAST(a.ts AS DATE) AS date, a.close AS upbit_krw, a.fx AS usdkrw, bn.close AS binance_usdt,
+       CASE WHEN a.symbol = 'USDT' THEN (a.close / a.fx - 1) * 100
+            ELSE (a.close / (bn.close * a.fx) - 1) * 100 END AS premium_pct
+FROM a LEFT JOIN bn ON bn.symbol = a.symbol AND bn.ts = a.ts
+WHERE CAST(a.ts AS DATE) < current_date AND (a.symbol = 'USDT' OR bn.close IS NOT NULL)
+ORDER BY a.symbol, date
+;;
+
+-- Spot volume by exchange, daily, USD (Upbit converted from KRW at the daily USD/KRW rate). Completed days only.
+CREATE OR REPLACE VIEW v_spot_volume_daily AS
+WITH fxd AS (SELECT ts, close AS fx FROM tv_bars WHERE symbol = 'FX_IDC:USDKRW' AND interval = '1d'),
+     s   AS (SELECT venue, symbol, ts, close, volume, volume_quote FROM cex_spot WHERE interval = '1d' AND symbol <> 'USDT'),
+     u   AS (SELECT s.*, fxd.fx FROM s ASOF LEFT JOIN fxd ON s.ts >= fxd.ts)
+SELECT CAST(ts AS DATE) AS date, venue, symbol,
+       CASE WHEN venue = 'upbit' THEN volume_quote / fx ELSE volume * close END AS volume_usd
+FROM u WHERE CAST(ts AS DATE) < current_date
+ORDER BY 1, 2, 3
