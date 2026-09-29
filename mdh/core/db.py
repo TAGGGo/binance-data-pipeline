@@ -39,11 +39,20 @@ def upsert(con, table: str, df: pd.DataFrame, keys: list[str]) -> int:
     if df is None or df.empty:
         return 0
     df = df.drop_duplicates(subset=keys, keep="last").reset_index(drop=True)
+    # pandas 3 keeps the parsed resolution (s / ms / us); DuckDB can't cast between TIMESTAMP_S/_MS
+    # columns, so always store plain TIMESTAMP (microseconds)
+    for c in df.columns:
+        if pd.api.types.is_datetime64_any_dtype(df[c]) and getattr(df[c].dt, "tz", None) is None:
+            df[c] = df[c].astype("datetime64[us]")
     con.register("_incoming", df)
     try:
         if not table_exists(con, table):
             con.execute(f'CREATE TABLE "{table}" AS SELECT * FROM _incoming LIMIT 0')
-        existing = {r[0] for r in con.execute(f'DESCRIBE "{table}"').fetchall()}
+        desc = con.execute(f'DESCRIBE "{table}"').fetchall()
+        for name, dtype, *_ in desc:   # repair tables created with a non-microsecond timestamp type
+            if dtype in ("TIMESTAMP_S", "TIMESTAMP_MS", "TIMESTAMP_NS"):
+                con.execute(f'ALTER TABLE "{table}" ALTER COLUMN "{name}" TYPE TIMESTAMP')
+        existing = {r[0] for r in desc}
         for name, dtype, *_ in con.execute("DESCRIBE _incoming").fetchall():
             if name not in existing:
                 con.execute(f'ALTER TABLE "{table}" ADD COLUMN "{name}" {dtype}')

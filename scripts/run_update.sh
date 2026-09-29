@@ -27,7 +27,8 @@ fi
 trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 
 log "start (vpn mode: $VPN_MODE)"
-OTHERS=$("$PY" -m mdh sources | grep -v '^binance$' | tr '\n' ' ')
+VPN_SRC="binance bybit binance_funding"   # need a non-US connection (see VPN_SOURCES in mdh/settings.py)
+OTHERS=$("$PY" -m mdh sources | grep -vxE 'binance|bybit|binance_funding' | tr '\n' ' ')
 "$PY" -m mdh update $OTHERS
 
 vpn_connected() { "$CTL" status 2>/dev/null | grep -qiE '^[[:space:]]*connected|connected to' && ! "$CTL" status 2>/dev/null | grep -qiE 'disconnected|not connected'; }
@@ -48,7 +49,7 @@ if [[ "$VPN_MODE" == "binance" ]]; then
   fi
 fi
 
-"$PY" -m mdh update binance
+"$PY" -m mdh update $VPN_SRC
 
 if [[ "$WE_CONNECTED" == 1 ]]; then
   "$CTL" disconnect >/dev/null 2>&1 && log "VPN disconnected (restored previous state)"

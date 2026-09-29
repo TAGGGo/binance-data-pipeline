@@ -19,6 +19,12 @@ Tested 2026-09-28. All free. Keys live in `.env` (gitignored).
 | alternative.me Fear & Greed | no | — | 20/min | 2018-02+ | |
 | CoinGecko `/global` | optional Demo key | ~30/min keyless; 10k/month Demo | 20/min, 9k/month | snapshot only | Historical global chart is paid-only (401) — TradingView covers it. |
 
+| Coinbase Exchange (`api.exchange.coinbase.com`) | no | 10 req/s | 300/min | BTC-USD 2015-07+, hourly + daily | Spot candles; used for the Coinbase premium (vs Binance, USDT-adjusted). |
+| OKX (`www.okx.com`) | no | 5 req / 2 s (stats) | 60/min | OI: 180 days daily, 30 days hourly; funding ~3 months | Collected hourly from now on. |
+| Bybit (`api.bybit.com`) | no | 600 / 5 s | 120/min | OI and funding back to 2020–21 | **403 from US IPs** — runs in the VPN step. |
+| Hyperliquid (`api.hyperliquid.xyz`) | no | 1200 weight/min | 40/min | funding 2023-05+; OI none | OI snapshotted every run. Funding is hourly (scaled ×8 to compare). |
+| CFTC TFF (`publicreporting.cftc.gov`) | no | — | 30/min | BTC 2018+, ETH 2021+, SOL/XRP 2025+ | Weekly CME positioning (as of Tuesday). |
+
 ## Definitions
 
 * **TOTAL3** (TradingView) = total crypto market cap excluding BTC and ETH. It *includes* stablecoins.
@@ -27,3 +33,6 @@ Tested 2026-09-28. All free. Keys live in `.env` (gitignored).
 * **net_liquidity_tn** = WALCL − WTREGEN − RRPONTSYD (all converted to $ trillions), as-of joined daily.
 * **ETF flows** in USD. `v_etf_flows` prefers SoSoValue; Farside fills older BTC/ETH dates.
   Cumulative BTC flows agree across providers within ~0.1% ($57.6B Farside vs $57.5B SoSoValue).
+* **Coinbase premium** = Coinbase USD close / (Binance USDT close × Coinbase USDT-USD) − 1, in bp. Completed hours/days only.
+* **Tracked OI** = Binance USDT-M + OKX (all contracts) + Bybit USDT perp + Hyperliquid. Not the whole market.
+* **Funding (8h bp)** = daily average funding rate × 8 / funding interval hours, in basis points.

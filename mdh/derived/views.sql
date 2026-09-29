@@ -103,3 +103,57 @@ LEFT JOIN etf USING (date)
 LEFT JOIN vix_daily vx USING (date)
 WHERE cal.date <= current_date
 ORDER BY cal.date
+;;
+
+-- Coinbase premium: Coinbase BTC-USD vs Binance BTC-USDT converted to USD with Coinbase USDT-USD.
+-- Positive = US buyers paying up. Hourly (from binance_1h) and daily (from Binance daily klines).
+CREATE OR REPLACE VIEW v_coinbase_premium_1h AS
+WITH cb AS (SELECT symbol, ts, close FROM cex_spot WHERE venue = 'coinbase' AND interval = '1h' AND symbol <> 'USDT'),
+     u  AS (SELECT ts, close AS usdt_usd FROM cex_spot WHERE venue = 'coinbase' AND interval = '1h' AND symbol = 'USDT'),
+     bn AS (SELECT replace(symbol, 'USDT', '') AS symbol, "timestamp" AS ts, spot_close FROM binance_1h)
+SELECT cb.symbol, cb.ts, cb.close AS coinbase_usd, bn.spot_close AS binance_usdt, u.usdt_usd,
+       (cb.close / (bn.spot_close * coalesce(u.usdt_usd, 1)) - 1) * 1e4 AS premium_bp
+FROM cb JOIN bn USING (symbol, ts) LEFT JOIN u USING (ts)
+-- completed hours only: the current candle's close depends on when each exchange was polled
+WHERE cb.ts < date_trunc('hour', now()::TIMESTAMP) - INTERVAL 1 HOUR
+ORDER BY cb.symbol, cb.ts
+;;
+
+CREATE OR REPLACE VIEW v_coinbase_premium_1d AS
+WITH cb AS (SELECT symbol, CAST(ts AS DATE) AS date, close FROM cex_spot WHERE venue = 'coinbase' AND interval = '1d' AND symbol <> 'USDT'),
+     u  AS (SELECT CAST(ts AS DATE) AS date, close AS usdt_usd FROM cex_spot WHERE venue = 'coinbase' AND interval = '1d' AND symbol = 'USDT'),
+     bn AS (SELECT symbol, CAST(ts AS DATE) AS date, close FROM cex_spot WHERE venue = 'binance' AND interval = '1d')
+SELECT cb.symbol, cb.date, cb.close AS coinbase_usd, bn.close AS binance_usdt, u.usdt_usd,
+       (cb.close / (bn.close * coalesce(u.usdt_usd, 1)) - 1) * 1e4 AS premium_bp
+FROM cb JOIN bn USING (symbol, date) LEFT JOIN u USING (date)
+WHERE cb.date < current_date   -- completed days only
+ORDER BY cb.symbol, cb.date
+;;
+
+-- Open interest by exchange, daily (USD). Binance = USDT-margined perp; OKX = all its contracts for the coin;
+-- Bybit = USDT perp; Hyperliquid = perp (snapshotted hourly, so history starts when collection started).
+CREATE OR REPLACE VIEW v_oi_daily_by_venue AS
+SELECT CAST("timestamp" AS DATE) AS date, 'binance' AS venue, replace(symbol, 'USDT', '') AS symbol,
+       last(sum_open_interest_value ORDER BY "timestamp") AS oi_usd
+FROM binance_1h WHERE symbol IN ('BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT') GROUP BY 1, 2, 3
+UNION ALL
+SELECT CAST(ts AS DATE), venue, symbol, last(oi_usd ORDER BY ts)
+FROM deriv_oi WHERE (venue IN ('okx', 'bybit') AND interval = '1d') OR venue = 'hyperliquid' GROUP BY 1, 2, 3
+;;
+
+-- Funding by exchange, daily average, expressed per 8 hours in basis points (Hyperliquid pays hourly).
+CREATE OR REPLACE VIEW v_funding_daily AS
+SELECT CAST(ts AS DATE) AS date, venue, symbol, avg(funding_rate * 8 / interval_hours) * 1e4 AS funding_8h_bp
+FROM deriv_funding GROUP BY 1, 2, 3
+ORDER BY 1, 2, 3
+;;
+
+-- CME futures positioning (weekly), converted from contracts to coins.
+CREATE OR REPLACE VIEW v_cme_positioning AS
+SELECT report_date, asset,
+       sum(open_interest * units_per_contract) AS oi_coins,
+       sum((lev_long - lev_short) * units_per_contract) AS lev_funds_net_coins,
+       sum((am_long - am_short) * units_per_contract) AS asset_mgr_net_coins,
+       sum((dealer_long - dealer_short) * units_per_contract) AS dealer_net_coins
+FROM cftc_crypto GROUP BY 1, 2
+ORDER BY 1, 2

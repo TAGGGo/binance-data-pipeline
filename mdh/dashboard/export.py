@@ -112,6 +112,44 @@ def build(con) -> dict:
         deriv[s] = {"daily": daily, "hourly": hourly}
     d["deriv"] = deriv
 
+    # ------------------------------------------------------------ cross-exchange: Coinbase premium, OI / funding by venue, CME
+    def exists(v):
+        return con.execute("SELECT count(*) FROM information_schema.tables WHERE table_name=?", [v]).fetchone()[0] > 0
+    VENUES = ["binance", "okx", "bybit", "hyperliquid"]
+    def pivot(sql, key, venues):
+        rows = con.execute(sql).fetchall()
+        dates = sorted({r[0].isoformat() for r in rows})
+        idx = {x: i for i, x in enumerate(dates)}
+        out = {"date": dates}
+        for v in venues:
+            out[v] = [None] * len(dates)
+        for dt, v, val in rows:
+            if v in out:
+                out[v][idx[dt.isoformat()]] = _clean(val, 4)
+        return out
+    xc = {}
+    for a in ASSETS:
+        x = {}
+        if exists("v_coinbase_premium_1d"):
+            x["cbp_1d"] = q(con, f"SELECT date, premium_bp FROM v_coinbase_premium_1d WHERE symbol='{a}' ORDER BY date",
+                            ["date", "bp"], {"bp": 2})
+        if exists("v_coinbase_premium_1h"):
+            x["cbp_1h"] = q(con, f"""SELECT ts, premium_bp FROM v_coinbase_premium_1h WHERE symbol='{a}'
+                                     AND ts >= (SELECT max(ts) FROM v_coinbase_premium_1h) - INTERVAL 14 DAY ORDER BY ts""",
+                            ["ts", "bp"], {"bp": 2})
+        if exists("v_oi_daily_by_venue"):
+            x["oi"] = pivot(f"""SELECT date, venue, oi_usd/1e9 FROM v_oi_daily_by_venue WHERE symbol='{a}'
+                                AND date >= current_date - 400 ORDER BY date""", "oi", VENUES)
+        if exists("v_funding_daily"):
+            x["funding"] = pivot(f"""SELECT date, venue, funding_8h_bp FROM v_funding_daily WHERE symbol='{a}'
+                                     AND date >= current_date - 400 ORDER BY date""", "f", VENUES)
+        if exists("v_cme_positioning"):
+            x["cme"] = q(con, f"""SELECT report_date, oi_coins, lev_funds_net_coins, asset_mgr_net_coins
+                                  FROM v_cme_positioning WHERE asset='{a}' ORDER BY report_date""",
+                         ["date", "oi", "lev_net", "am_net"], {"oi": 1, "lev_net": 1, "am_net": 1})
+        xc[a] = x
+    d["xc"] = xc
+
     # ------------------------------------------------------------ freshness per source (for the footer)
     d["freshness"] = [
         {"source": r[0], "last_run": str(r[1])[:16], "status": r[2]}

@@ -40,6 +40,11 @@ HOST_RPM = {
     "data-api.binance.vision": 600,        # weight 6000/min
     "data.binance.vision": 1200,           # static archive
     "cdn.cboe.com": 20,
+    "api.exchange.coinbase.com": 300,      # public: 10 req/s
+    "www.okx.com": 60,                     # rubik stats: 5 req / 2 s
+    "api.bybit.com": 120,                  # 600 req / 5 s per IP
+    "api.hyperliquid.xyz": 40,             # 1200 weight/min; history calls weigh ~20
+    "publicreporting.cftc.gov": 30,
 }
 # hard monthly ceilings (published quota minus a safety margin)
 MONTHLY_QUOTA = {
@@ -100,3 +105,10 @@ COINMETRICS_ASSETS = ["btc", "eth"]
 COINMETRICS_METRICS = ["PriceUSD", "CapMrktCurUSD", "CapMVRVCur", "AdrActCnt", "TxCnt", "SplyCur"]
 DEFILLAMA_STABLES = {"ALL": None, "USDT": 1, "USDC": 2}   # name: DefiLlama stablecoin id
 DERIBIT_DVOL = ["BTC", "ETH"]
+
+# ----------------------------------------------------------------------------- Cross-exchange (mdh/sources/cex.py)
+CEX_ASSETS = ["BTC", "ETH", "SOL", "XRP"]
+CEX_SPOT_START = {"1h": "2024-08-01", "1d": "2015-01-01"}   # Coinbase candles
+HL_FUNDING_START = "2023-05-01"
+# sources that need a non-US connection; scripts/run_update.sh runs them inside the VPN step
+VPN_SOURCES = ["binance", "bybit", "binance_funding"]
