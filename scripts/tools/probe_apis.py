@@ -6,7 +6,7 @@ For each source it makes 1-3 gentle requests, then reports:
   ok / HTTP status / latency / rows returned / earliest & latest date / rate-limit headers.
 
 Run from the repo root on your Mac:
-    python3 scripts/probe_apis.py
+    python3 scripts/tools/probe_apis.py
 Optional API keys (read from environment or a .env file in the repo root):
     FRED_API_KEY, COINGECKO_DEMO_KEY, SOSOVALUE_API_KEY, COINGLASS_API_KEY
 Optional libraries (probes are skipped if missing):
@@ -23,7 +23,7 @@ from pathlib import Path
 
 import requests
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
                     "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"}
 RATE_HDR_KEYS = ("ratelimit", "rate-limit", "x-mbx-used-weight", "retry-after", "x-cg", "quota")

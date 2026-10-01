@@ -1,5 +1,5 @@
 #!/bin/bash
-# Hourly entry point used by the launchd job (scripts/install_scheduler.sh).
+# Hourly entry point used by the launchd job (scripts/ops/install_scheduler.sh).
 #
 # 1. Updates every non-Binance source on your normal connection.
 # 2. Binance step:
@@ -10,7 +10,7 @@
 # Settings live in .env:  MDH_VPN_MODE=binance   MDH_VPN_LOCATION="Japan - Tokyo"
 set -uo pipefail
 export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Applications/ExpressVPN.app/Contents/MacOS:$PATH"
-REPO="$(cd "$(dirname "$0")/.." && pwd)"
+REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO"
 if [[ -x "$REPO/.venv/bin/python3" ]]; then PY="$REPO/.venv/bin/python3"; else PY="$(command -v python3)"; fi
 set -a; [[ -f .env ]] && . ./.env; set +a
@@ -54,4 +54,11 @@ fi
 if [[ "$WE_CONNECTED" == 1 ]]; then
   "$CTL" disconnect >/dev/null 2>&1 && log "VPN disconnected (restored previous state)"
 fi
+# BTC on-chain metrics from BGeometrics free API (1 request per metric per UTC day; quota 10/h, 15/day)
+"$PY" scripts/ops/fetch_bgeometrics.py 2>&1 | while read -r line; do log "$line"; done
+# rebuild the dashboard data file (data/dashboard/data.json); publishing it to the artifact is a separate step
+if "$PY" -m mdh export >/dev/null; then log "dashboard data.json exported"; else log "mdh export failed"; fi
+# daily ETF report to WeChat via PushPlus (sends once per new session, after 13:00 UTC; needs PUSHPLUS_TOKEN in .env)
+"$PY" scripts/ops/push_etf_report.py 2>&1 | while read -r line; do log "$line"; done
+
 log "done"
