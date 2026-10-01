@@ -4,7 +4,7 @@ Export a compact JSON snapshot of the database for the dashboard page.
     python3 -m mdh export            -> data/dashboard/data.json
 
 The page (mdh/dashboard/page.html) only reads this file, so refreshing the dashboard is:
-`python3 -m mdh update && python3 -m mdh export`, then republish data.json.
+`python3 -m mdh update && python3 -m mdh export`, then republish data.json and coins/*.json.
 """
 from __future__ import annotations
 
@@ -48,11 +48,11 @@ def build(con) -> dict:
 
     # ------------------------------------------------------------ ETF flows (daily, per asset)
     etf = {}
-    for a in ASSETS:
+    for a in ASSETS + [x for x in list(settings.GRAYSCALE_ETFS) + list(settings.ISSUER_ETFS) if x not in ASSETS]:
         etf[a] = q(con, f"""SELECT date, net_inflow_usd/1e6, net_assets_usd/1e9, cum_net_inflow_usd/1e9, value_traded_usd/1e6
                             FROM v_etf_flows WHERE asset='{a}' ORDER BY date""",
                    ["date", "flow_m", "aum_b", "cum_b", "traded_m"], {"flow_m": 2, "aum_b": 3, "cum_b": 3, "traded_m": 1})
-    d["etf"] = etf
+    d["etf"] = {a: v for a, v in etf.items() if v["date"] or a in ASSETS}
     # per-fund (BTC/ETH, Farside): last 90 trading days
     funds = {}
     for a in ("BTC", "ETH"):
@@ -172,10 +172,42 @@ def build(con) -> dict:
     return d
 
 
+def since(con) -> dict | None:
+    """Hourly Binance spot closes for every coin-page coin from settings.SINCE_BASE_UTC. Base = the open of that
+    hour's candle (the price at that moment); latest = the newest hourly close (the current hour may be forming)."""
+    import pandas as pd
+    if not db.table_exists(con, "bn_kline_1h"):
+        return None
+    base = pd.Timestamp(settings.SINCE_BASE_UTC)
+    k = con.execute("""SELECT symbol, ts, open, close FROM bn_kline_1h WHERE market = 'spot' AND ts >= ?
+                       ORDER BY symbol, ts""", [base.to_pydatetime()]).df()
+    out = {"base_utc": base.isoformat(), "label": settings.SINCE_LABEL, "coins": {}}
+    alt = con.execute("""SELECT symbol, venue, ts, open, close FROM cex_spot WHERE interval = '1h' AND ts >= ?
+                         ORDER BY ts""", [base.to_pydatetime()]).df() if db.table_exists(con, "cex_spot") else pd.DataFrame()
+    for sym in settings.COIN_PAGES:
+        g = k[k.symbol == sym]
+        if (g.empty or pd.Timestamp(g.ts.iloc[0]) != base) and sym in settings.SPOT_FALLBACK and len(alt):
+            g = alt[(alt.symbol == sym) & (alt.venue == settings.SPOT_FALLBACK[sym][0])]   # e.g. HYPE: Hyperliquid spot
+        if g.empty or pd.Timestamp(g.ts.iloc[0]) != base:
+            continue
+        b = float(g.open.iloc[0])
+        out["coins"][sym] = {"base": _clean(b, 8), "t": [int(pd.Timestamp(t).timestamp()) for t in g.ts],
+                             "pct": [_clean((c / b - 1) * 100, 3) for c in g.close], "last": _clean(float(g.close.iloc[-1]), 8)}
+    out["last_utc"] = pd.Timestamp(k.ts.max()).isoformat() if len(k) else None
+    return out
+
+
 def run() -> str:
     con = db.connect(read_only=True)
     data = build(con)
     out = settings.DATA_DIR / "dashboard" / "data.json"
+    data["since"] = since(con)
+    from mdh.dashboard import etf_report
+    data["etf_report"] = etf_report.build(con)
+    # coin pages: candles + indicators per coin in dashboard/coins/<SYM>.json, summary + readout in data.json
+    if db.table_exists(con, "bn_kline_1d"):
+        from mdh.dashboard import coins
+        data["coins"] = coins.export(con, out.parent / "coins")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(data, separators=(",", ":")))
     return f"wrote {out} ({out.stat().st_size / 1e6:.2f} MB)"
