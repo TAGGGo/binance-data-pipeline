@@ -40,7 +40,7 @@ def run(ctx, full=False, symbols=None, start=None):
     RAW.mkdir(parents=True, exist_ok=True)
     for interval in settings.BINANCE_INTERVALS:
         for sym in symbols or settings.BINANCE_SYMBOLS:
-            p = BinanceMarketDataParser(sym, interval=interval, start_date=start or settings.BINANCE_START,
+            p = BinanceMarketDataParser(sym, interval=interval, start_date=start or settings.BINANCE_START_OVERRIDES.get(sym, settings.BINANCE_START),
                                         output_dir=str(RAW))
             p.run(force_update=False)
     return load_csvs(ctx.con)

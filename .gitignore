@@ -11,3 +11,6 @@ __pycache__/
 data/
 *.duckdb
 *.duckdb.wal
+
+# local virtualenv
+.venv/

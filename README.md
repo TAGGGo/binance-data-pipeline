@@ -15,6 +15,7 @@ Collects crypto + macro market data from free sources into one local DuckDB file
 | On-chain | BTC/ETH price, market cap, realized cap, MVRV, active addresses, tx count, supply | Coin Metrics Community |
 | Sentiment / vol | Fear & Greed index, Deribit DVOL (BTC, ETH) | alternative.me, Deribit |
 | Snapshot | CoinGecko global market cap + dominance | CoinGecko |
+| XRP holders | Daily XRPL rich list (top 10,000 accounts) by holder type: exchange, Ripple, likely custodial, unlabeled whales (`v_xrp_holders_daily`, `v_xrp_whale_flow_daily`) | XRPScan + Ripple public XRPL server |
 
 Derived views: `v_etf_flows`, `v_crypto_market_daily` (incl. **BTC dominance ex-stablecoins**),
 `v_net_liquidity` (Fed assets − TGA − RRP), `v_macro_daily` (one wide row per day).
@@ -38,7 +39,7 @@ python3 -m mdh sql "SELECT * FROM v_macro_daily ORDER BY date DESC LIMIT 5"
 python3 -m mdh sources                 # list source names
 ```
 
-Hourly automatic updates on macOS: `scripts/install_scheduler.sh` (launchd; see the script header).
+Hourly automatic updates on macOS: `scripts/ops/install_scheduler.sh` (launchd; see the script header).
 
 The original Binance CLI still works: `python3 market_data_parser.py --symbols BTCUSDT --intervals 1h`
 (output now defaults to `data/raw/binance/`).
@@ -55,6 +56,20 @@ It is published as a private Claude artifact ("Market Data Hub"). To refresh it,
 refresh the dashboard: it runs the two commands above and republishes `data.json` to the same link.
 Pages: Overview, ETF flows, Market & macro, Derivatives (Binance).
 
+## Coin pages (BTC ETH XRP SOL ZEC + DASH ZEN LDO ENA AAVE SUI UNI NEAR DOGE)
+
+One page per coin with 4H / 1D / 1W / 1M candles (Binance spot, UTC boundaries), MA 20/30/50/100 (SMA or EMA),
+MACD 12/26/9, RSI 14, funding, open interest and spot/perp CVD, plus plain-English "what the numbers say" lines.
+
+* Data: `binance_hist` source (no VPN): daily klines since listing, hourly klines since 2023, hourly OI snapshots from
+  the metrics archive, funding seed. Today's perp/OI comes from `binance_1h` (VPN step).
+  Tables: `bn_kline_1d`, `bn_kline_1h`, `bn_metrics_1h_hist`.
+* Math: `mdh/indicators.py` (formulas written out at the top), tests in `tests/test_indicators.py`.
+* Check against Binance: `python3 scripts/tools/verify_candles.py` (rebuilt days/weeks/months vs Binance's own klines).
+* Export: `mdh export` also writes `data/dashboard/coins/<SYM>.json`; publish those with data.json.
+* Add a coin: append to `COIN_MORE` (or `COIN_TABS`) in `mdh/settings.py`, add `<SYM>USDT` to `BINANCE_SYMBOLS` with a
+  recent `BINANCE_START_OVERRIDES` date, run `python3 -m mdh update binance_hist`.
+
 ## Layout
 
 ```
@@ -66,9 +81,11 @@ mdh/
   sources/             one module per provider (binance/, fred, nasdaq, tradingview, ...)
   derived/views.sql    derived views (dominance ex-stables, net liquidity, macro daily)
 seeds/etf/             one-time ETF flow history that APIs don't serve for free (tracked in git)
-scripts/               probe_apis.py (health check), install_scheduler.sh
+scripts/ops/           hourly pipeline: run_update.sh, install_scheduler.sh, fetch_bgeometrics.py, push_etf_report.py
+scripts/research/      backtests and one-off analyses (run from repo root)
+scripts/tools/         probe_apis.py (health check), verify_candles.py, load_xrpl_backfill.py
 tests/                 python3 -m unittest discover tests
-data/                  gitignored: market.duckdb, raw/binance/*.csv, state/
+data/                  gitignored: market.duckdb, raw/, state/, logs/, outputs/ (finished charts), scratch/ (dumps)
 ```
 
 ## Rate limits

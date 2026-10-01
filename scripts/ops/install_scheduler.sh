@@ -1,13 +1,14 @@
 #!/bin/bash
 # Install an hourly launchd job on macOS that runs `python3 -m mdh update`.
-#   ./scripts/install_scheduler.sh            install / refresh
-#   ./scripts/install_scheduler.sh uninstall  remove
+#   ./scripts/ops/install_scheduler.sh            install / refresh
+#   ./scripts/ops/install_scheduler.sh uninstall  remove
 # Logs: data/logs/update.log   (launchd runs even when Terminal is closed; the Mac must be awake)
 set -euo pipefail
 LABEL="com.market-data-hub.update"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
-REPO="$(cd "$(dirname "$0")/.." && pwd)"
-PY="$(command -v python3)"
+REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+# prefer the repo virtualenv if there is one (python3 -m venv .venv)
+if [[ -x "$REPO/.venv/bin/python3" ]]; then PY="$REPO/.venv/bin/python3"; else PY="$(command -v python3)"; fi
 
 if [[ "${1:-}" == "uninstall" ]]; then
   launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
@@ -21,7 +22,7 @@ cat > "$PLIST" <<EOF
 <plist version="1.0"><dict>
   <key>Label</key><string>$LABEL</string>
   <key>ProgramArguments</key><array>
-    <string>$PY</string><string>-m</string><string>mdh</string><string>update</string>
+    <string>/bin/bash</string><string>$REPO/scripts/ops/run_update.sh</string>
   </array>
   <key>WorkingDirectory</key><string>$REPO</string>
   <key>StartCalendarInterval</key><dict><key>Minute</key><integer>7</integer></dict>
@@ -32,5 +33,6 @@ cat > "$PLIST" <<EOF
 EOF
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
 launchctl bootstrap "gui/$(id -u)" "$PLIST"
-echo "installed $LABEL: runs every hour at :07 using $PY"
+echo "installed $LABEL: runs scripts/ops/run_update.sh every hour at :07 (python: $PY)"
+echo "If the log shows 'Operation not permitted', add /bin/bash and $PY to System Settings > Privacy & Security > Full Disk Access."
 echo "tail -f $REPO/data/logs/update.log"

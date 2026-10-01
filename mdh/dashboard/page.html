@@ -17,7 +17,7 @@
   --inflow: #2a78d6;      /* diverging pole: inflow */
   --outflow: #e34948;     /* diverging pole: outflow */
   --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;  /* BTC ETH SOL XRP */
-  --s5: #e87ba4; --s7: #4a3aa7;
+  --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7;
   --grid: rgba(14,22,33,.07);
   --chip: #eef1f5;
   --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
@@ -28,14 +28,14 @@
   :root:not([data-theme="light"]) {
     --bg: #0e1116; --panel: #161a21; --ink: #eef1f5; --ink-2: #a3acb9; --ink-3: #6f7886; --rule: #252b34;
     --accent: #3987e5; --up: #2fb573; --down: #e66767; --inflow: #3987e5; --outflow: #e66767;
-    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s7: #9085e9;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9;
     --grid: rgba(238,241,245,.07); --chip: #1f252e; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0e1116; --panel: #161a21; --ink: #eef1f5; --ink-2: #a3acb9; --ink-3: #6f7886; --rule: #252b34;
   --accent: #3987e5; --up: #2fb573; --down: #e66767; --inflow: #3987e5; --outflow: #e66767;
-  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s7: #9085e9;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9;
   --grid: rgba(238,241,245,.07); --chip: #1f252e; color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -63,7 +63,7 @@ h2 { margin: 0; font-family: var(--f-display); font-stretch: 85%; font-weight: 7
 .eyebrow { font: 500 10.5px/1 var(--f-data); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
 
 .controls { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
-.seg { display: inline-flex; background: var(--chip); border-radius: 8px; padding: 3px; gap: 2px; }
+.seg { display: inline-flex; flex-wrap: wrap; background: var(--chip); border-radius: 8px; padding: 3px; gap: 2px; max-width: 100%; }
 .seg button { appearance: none; border: 0; background: none; color: var(--ink-2); font: 600 12px/1 var(--f-body); padding: 7px 10px; border-radius: 6px; cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
 
@@ -132,6 +132,73 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
   .tile .v { font-size: 22px; }
   nav.tabs { margin-left: 0; width: 100%; }
 }
+
+/* coin pages */
+.coin-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 12px 24px; }
+.coin-head .px { font: 700 34px/1 var(--f-display); font-stretch: 78%; font-variant-numeric: tabular-nums; }
+.coin-head .px small { font: 500 13px/1 var(--f-data); margin-left: 8px; }
+.says { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px 20px; margin: 0; padding: 0; list-style: none; }
+.says li { display: grid; grid-template-columns: 8px 1fr; gap: 10px; align-items: baseline; font-size: 13px; color: var(--ink); min-width: 0; }
+.says li::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--ink-3); transform: translateY(-1px); }
+.says li.bull::before { background: var(--up); } .says li.bear::before { background: var(--down); }
+.says b { font-weight: 650; }
+.stack { display: flex; flex-direction: column; }
+.pane { position: relative; width: 100%; border-top: 1px solid var(--rule); }
+.pane:first-child { border-top: 0; }
+.pane .tag { position: absolute; left: 8px; top: 6px; z-index: 3; font: 600 10px/1 var(--f-data); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); pointer-events: none; background: var(--panel); padding: 2px 4px; border-radius: 3px; }
+.pane.price { height: 440px; } .pane.low { height: 130px; }
+@media (max-width: 520px) { .pane.price { height: 320px; } .pane.low { height: 110px; } .coin-head .px { font-size: 28px; } }
+.sig-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 10px 22px; }
+.sig-list li { display: grid; grid-template-columns: 12px 1fr; gap: 10px; align-items: start; font-size: 13px; min-width: 0; }
+.sig-dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 3px; display: inline-block; }
+.sig-v { display: block; font: 500 12px/1.4 var(--f-data); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.sig-r { font-size: 11.5px; color: var(--ink-3); }
+#sig-card .card-h h3 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.formulas { font-size: 12px; color: var(--ink-2); display: grid; gap: 6px; max-width: 95ch; }
+.formulas code { font: 500 11.5px/1.4 var(--f-data); color: var(--ink); }
+
+/* ETF daily report */
+.er { display: flex; flex-direction: column; gap: 14px; }
+.er-head { display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; background: linear-gradient(135deg, #0f1f33, #1c3553); color: #fff; border-radius: 12px; padding: 20px 22px; }
+.er-eyebrow { font: 600 11px/1 var(--f-data); letter-spacing: .12em; color: #b9a6ff; }
+.er-title { font: 750 34px/1.1 var(--f-display); font-stretch: 85%; margin: 8px 0 6px; color: #fff; }
+.er-sub { font-size: 14px; color: #c9d3e0; } .er-sub b { color: #fff; }
+.er-meta { font: 500 12.5px/1.6 var(--f-data); color: #c9d3e0; text-align: right; } .er-meta b { color: #fff; }
+.er-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.er-kpi { background: var(--panel); border: 1px solid var(--rule); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.er-kpi .k { font: 650 13px/1.2 var(--f-body); color: var(--ink-2); }
+.er-kpi .v { font: 750 26px/1 var(--f-display); font-stretch: 82%; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.er-kpi .d { display: flex; justify-content: space-between; align-items: center; gap: 6px; font: 500 11.5px/1.2 var(--f-data); color: var(--ink-2); flex-wrap: wrap; }
+.er-kpi.dark { background: #0f1f33; border-color: #0f1f33; color: #fff; } .er-kpi.dark .k, .er-kpi.dark .d { color: #c9d3e0; }
+.er-pill { font: 650 11px/1 var(--f-data); padding: 4px 7px; border-radius: 6px; background: var(--chip); color: var(--ink-2); }
+.er-pill.up { background: color-mix(in srgb, var(--up) 16%, transparent); color: var(--up); } .er-pill.down { background: color-mix(in srgb, var(--down) 16%, transparent); color: var(--down); }
+.er-sub2 { font: 600 12px/1 var(--f-data); color: #fff; }
+.er-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; background: var(--chip); border-radius: 12px; padding: 12px 16px; }
+.er-strip > div { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: baseline; }
+.er-strip b { font-size: 13px; } .er-strip span { grid-column: 1; font: 500 11px/1.3 var(--f-data); color: var(--ink-2); } .er-strip em { grid-column: 2; grid-row: 1 / span 2; font: 650 15px/1 var(--f-data); font-style: normal; font-variant-numeric: tabular-nums; }
+.er-text p { margin: 0; font-size: 14px; line-height: 1.65; }
+.er-grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+.er-focus { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.er-focus > div { border-radius: 10px; padding: 10px 12px; } .er-focus .up { background: color-mix(in srgb, var(--up) 9%, transparent); } .er-focus .dn { background: color-mix(in srgb, var(--down) 9%, transparent); }
+.er-focus h4 { margin: 0 0 8px; font-size: 14px; text-align: center; } .er-focus .up h4 { color: var(--up); } .er-focus .dn h4 { color: var(--down); }
+.er-focus .row { display: grid; grid-template-columns: 18px 1fr; gap: 2px 6px; font-size: 12.5px; margin-bottom: 6px; } .er-focus .row i { font: 650 10px/18px var(--f-data); font-style: normal; text-align: center; border-radius: 50%; background: var(--panel); height: 18px; }
+.er-focus .row b { grid-column: 2; text-align: right; font: 650 12.5px/1 var(--f-data); } .er-focus small, .er-bars small, .er-rank small { color: var(--ink-3); font: 500 10px var(--f-data); }
+.er-bars .row { display: grid; grid-template-columns: 118px 1fr 92px; gap: 8px; align-items: center; font-size: 12.5px; padding: 3px 0; border-bottom: 1px solid var(--rule); }
+.er-bars .track { position: relative; height: 12px; } .er-bars .track::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--ink-3); }
+.er-bars .track i { position: absolute; top: 0; height: 12px; border-radius: 3px; } .er-bars .track i.pos { background: var(--up); } .er-bars .track i.neg { background: var(--down); }
+.er-bars b { text-align: right; font: 650 12px/1 var(--f-data); }
+.er-share { display: inline-block; width: 60px; height: 4px; border-radius: 2px; background: var(--chip); margin-right: 8px; vertical-align: middle; } .er-share i { display: block; height: 4px; border-radius: 2px; background: var(--s1); }
+.er-counts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .er-counts > div, .er-big > div { border-radius: 10px; padding: 10px; background: var(--chip); text-align: center; }
+.er-counts span, .er-big span { display: block; font-size: 12px; color: var(--ink-2); } .er-counts b { font: 750 30px/1.2 var(--f-display); }
+.er-counts .up, .er-big .up { background: color-mix(in srgb, var(--up) 9%, transparent); } .er-counts .up b, .er-big .up em { color: var(--up); }
+.er-counts .dn, .er-big .dn { background: color-mix(in srgb, var(--down) 9%, transparent); } .er-counts .dn b, .er-big .dn em { color: var(--down); }
+.er-big { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; } .er-big b { display: block; font-size: 16px; margin: 4px 0; } .er-big em { font: 700 18px/1.2 var(--f-data); font-style: normal; }
+.er-sums { display: grid; gap: 4px; margin-top: 8px; font-size: 12.5px; } .er-sums div { display: flex; justify-content: space-between; } .er-sums b { font-family: var(--f-data); }
+.er-method { max-width: none; }
+@media (max-width: 520px) { .er-title { font-size: 26px; } .er-bars .row { grid-template-columns: 96px 1fr 80px; } .er-meta { text-align: left; } }
+/* print layout for the daily image */
+body.print header.bar, body.print footer, body.print .er-controls { display: none !important; }
+body.print .wrap { max-width: 1400px; padding: 24px; } body.print section.view { padding-top: 0; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 
@@ -143,6 +210,14 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
     </div>
     <nav class="tabs" role="tablist" aria-label="Dashboard sections">
       <button role="tab" id="tab-overview" data-view="overview" aria-selected="true">Overview</button>
+      <button role="tab" id="tab-btc" data-view="btc" aria-selected="false">BTC</button>
+      <button role="tab" id="tab-eth" data-view="eth" aria-selected="false">ETH</button>
+      <button role="tab" id="tab-xrp" data-view="xrp" aria-selected="false">XRP</button>
+      <button role="tab" id="tab-sol" data-view="sol" aria-selected="false">SOL</button>
+      <button role="tab" id="tab-zec" data-view="zec" aria-selected="false">ZEC</button>
+      <button role="tab" id="tab-more" data-view="more" aria-selected="false">More coins</button>
+      <button role="tab" id="tab-since" data-view="since" aria-selected="false">Since 9/18</button>
+      <button role="tab" id="tab-etfreport" data-view="etfreport" aria-selected="false">ETF Daily</button>
       <button role="tab" id="tab-etf" data-view="etf" aria-selected="false">ETF flows</button>
       <button role="tab" id="tab-market" data-view="market" aria-selected="false">Market &amp; macro</button>
       <button role="tab" id="tab-deriv" data-view="deriv" aria-selected="false">Derivatives</button>
@@ -152,6 +227,14 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
 
 <main class="wrap">
   <section class="view" id="view-overview"></section>
+  <section class="view" id="view-btc" hidden></section>
+  <section class="view" id="view-eth" hidden></section>
+  <section class="view" id="view-xrp" hidden></section>
+  <section class="view" id="view-sol" hidden></section>
+  <section class="view" id="view-zec" hidden></section>
+  <section class="view" id="view-more" hidden></section>
+  <section class="view" id="view-since" hidden></section>
+  <section class="view" id="view-etfreport" hidden></section>
   <section class="view" id="view-etf" hidden></section>
   <section class="view" id="view-market" hidden></section>
   <section class="view" id="view-deriv" hidden></section>
@@ -163,10 +246,10 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
 <script>
 (() => {
   const ASSETS = ["BTC", "ETH", "SOL", "XRP"];
-  const SERIES = { BTC: "--s1", ETH: "--s2", SOL: "--s3", XRP: "--s4" };
+  const SERIES = { BTC: "--s1", ETH: "--s2", SOL: "--s3", XRP: "--s4", ZEC: "--s5" };
   let D = null;
   const charts = {};
-  const state = { view: "overview", etfAsset: "BTC", etfRange: 90, mktRange: 1095, derivSym: "BTCUSDT", derivRange: "90" };
+  const state = { view: "overview", etfAsset: "BTC", etfRange: 90, mktRange: 1095, derivSym: "BTCUSDT", derivRange: "90", coinTf: "1d", coinMa: "sma", coinScale: "log" };
   try { const s = JSON.parse(localStorage.getItem("amd-state") || "{}"); Object.assign(state, s); } catch (e) {}
   const save = () => { try { localStorage.setItem("amd-state", JSON.stringify(state)); } catch (e) {} };
 
@@ -218,6 +301,13 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
     if (yFmt) { o.scales.y.ticks.callback = (v) => yFmt(v); o.plugins.tooltip.callbacks = { label: (ctx) => ` ${ctx.dataset.label}: ${yFmt(ctx.parsed.y)}` }; }
     if (yMin !== undefined) o.scales.y.min = yMin;
     draw(id, { type: "line", data: { labels, datasets: datasets.map((d) => Object.assign({ borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: 0, spanGaps: true, fill: false }, d)) }, options: o });
+  }
+  function stackedBars(id, labels, sets, { yFmt } = {}) {
+    const o = baseOpts();
+    o.scales.x.stacked = true; o.scales.y.stacked = true;
+    if (yFmt) { o.scales.y.ticks.callback = (v) => yFmt(v); o.plugins.tooltip.callbacks = { label: (ctx) => ` ${ctx.dataset.label}: ${yFmt(ctx.parsed.y)}`,
+      footer: (items) => "Total: " + yFmt(items.reduce((t, i) => t + (i.parsed.y || 0), 0)) }; }
+    draw(id, { type: "bar", options: o, data: { labels, datasets: sets.map((d) => ({ borderRadius: 0, maxBarThickness: 16, categoryPercentage: .9, barPercentage: .95, borderWidth: 0, ...d })) } });
   }
   function polarityBars(id, labels, values, { yFmt, label = "Net flow" } = {}) {
     const inC = css("--inflow"), outC = css("--outflow");
@@ -290,6 +380,7 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
   // ================================================================ ETF
   function renderEtf() {
     const v = $("#view-etf");
+    if (!D.etf[state.etfAsset]) state.etfAsset = "BTC";
     const a = state.etfAsset, E = D.etf[a];
     const from = state.etfRange ? Math.max(0, E.date.length - state.etfRange) : 0;
     const e = cut(E, from);
@@ -304,11 +395,11 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
 
     v.innerHTML = `
       <div class="controls">
-        ${seg("etfAsset", ASSETS.map((x) => [x, x]), a)}
+        ${seg("etfAsset", Object.keys(D.etf).map((x) => [x, x]), a)}
         ${seg("etfRange", [[30, "30 sessions"], [90, "90"], [250, "1 year"], [0, "All"]], state.etfRange)}
       </div>
       <div><span class="eyebrow">US spot ${a} ETFs · ${e.date[0]} → ${e.date[e.date.length - 1]}</span><h2>${fmtM(sum)} net over ${flows.length} sessions</h2>
-      <p class="sub">Source: ${a === "BTC" || a === "ETH" ? "SoSoValue, with Farside for sessions before mid-2025" : "SoSoValue"}. Flows are creations minus redemptions in USD.</p></div>
+      <p class="sub">Source: ${a === "BTC" || a === "ETH" ? "SoSoValue, with Farside for sessions before mid-2025" : a === "ZEC" ? "Grayscale's daily ZCSH file: change in shares outstanding × NAV, dated to the trade day (shares settle a day later, so the newest session fills in the next day). ZCSH is the only US ZEC ETF; listed 2026-08-25" : "SoSoValue"}. Flows are creations minus redemptions in USD.</p></div>
       <div class="stats">
         <div class="stat"><div class="k">Inflow / outflow days</div><div class="v">${inD} / ${outD}</div></div>
         <div class="stat"><div class="k">Largest inflow</div><div class="v">${fmtM(maxIn)}</div><div class="note">${e.date[iMaxIn] || ""}</div></div>
@@ -404,7 +495,7 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
       layout: { background: { type: "solid", color: css("--panel") }, textColor: css("--ink-2"), fontFamily: "'IBM Plex Mono', ui-monospace, Menlo, monospace", fontSize: 11 },
       grid: { vertLines: { visible: false }, horzLines: { color: css("--grid") } },
       rightPriceScale: { borderColor: css("--rule"), mode: state.btcScale === "lin" ? 0 : 1 },
-      timeScale: { borderColor: css("--rule"), rightOffset: 4 },
+      timeScale: { borderColor: css("--rule"), rightOffset: 4, minBarSpacing: 0.05 },
       crosshair: { mode: 0 },
       localization: { locale: "en-US", priceFormatter: (x) => "$" + Math.round(x).toLocaleString("en-US"), dateFormat: "yyyy-MM-dd" },
     });
@@ -412,6 +503,15 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
     const up = css("--up"), down = css("--down");
     const cs = chart.addCandlestickSeries({ upColor: up, downColor: down, wickUpColor: up, wickDownColor: down, borderVisible: false, priceLineVisible: false });
     cs.setData(weekly ? S.weeks : S.candles);
+    // volume pane: BTC spot volume across Binance + Coinbase + Upbit (USD)
+    if (D.btc_vol && D.btc_vol.date.length) {
+      const vs = chart.addHistogramSeries({ priceScaleId: "vol", priceFormat: { type: "volume" }, priceLineVisible: false, lastValueVisible: false, color: css("--ink-3") });
+      chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 }, visible: false });
+      let vdata = D.btc_vol.date.map((t, i) => ({ time: t, value: D.btc_vol.b[i] })).filter((x) => isNum(x.value));
+      if (weekly) { const agg = {}; for (const x of vdata) { const w = mondayOf(x.time); agg[w] = (agg[w] || 0) + x.value; } vdata = Object.keys(agg).sort().map((w) => ({ time: w, value: agg[w] })); }
+      vs.setData(vdata.map((x) => ({ ...x, color: css("--ink-3") })));
+      S.vol = Object.fromEntries(vdata.map((x) => [x.time, x.value]));
+    }
     const lines = {};
     for (const l of BTC_LINES) {
       if (weekly && l.key.endsWith("d")) continue;
@@ -429,7 +529,8 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
     const out = $("#btc-readout");
     const lastOf = (arr) => arr.length ? arr[arr.length - 1].value : null;
     const show = (bar, vals, label) => {
-      out.innerHTML = `<span class="ro-d">${label}</span> O ${fmt(bar.open, 0)} H ${fmt(bar.high, 0)} L ${fmt(bar.low, 0)} <b>C ${fmt(bar.close, 0)}</b>` +
+      const vol = S.vol ? S.vol[bar.time] : null;
+      out.innerHTML = `<span class="ro-d">${label}</span> O ${fmt(bar.open, 0)} H ${fmt(bar.high, 0)} L ${fmt(bar.low, 0)} <b>C ${fmt(bar.close, 0)}</b>` + (isNum(vol) ? ` <span class="ro-m">Vol $${fmt(vol, 2)}B</span>` : "") +
         BTC_LINES.filter((l) => lines[l.key] && state.btcOn[l.key]).map((l) => `<span class="ro-m"><i style="background:var(${l.color})"></i>${l.label} ${fmt(vals[l.key], 0)}</span>`).join("");
     };
     const src = weekly ? S.weeks : S.candles, maSrc = weekly ? S.weekly : S.daily;
@@ -469,6 +570,138 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
       <div class="stat"><div class="k">vs 200D SMA</div><div class="v">${vs(d200)}</div><div class="note">$${fmt(d200, 0)}</div></div>`;
   }
 
+  // ================================================================ Coinbase premium
+  const lwCharts = {};
+  function premiumChart(hostId, readoutId, src, { hourly, unit, dec, win, zero = true, extra } = {}) {
+    const host = $("#" + hostId);
+    if (lwCharts[hostId]) { try { lwCharts[hostId].remove(); } catch (e) {} delete lwCharts[hostId]; }
+    if (!window.LightweightCharts || !host) return;
+    const LC = window.LightweightCharts;
+    const chart = LC.createChart(host, {
+      autoSize: true,
+      layout: { background: { type: "solid", color: css("--panel") }, textColor: css("--ink-2"), fontFamily: "'IBM Plex Mono', ui-monospace, Menlo, monospace", fontSize: 11 },
+      grid: { vertLines: { visible: false }, horzLines: { color: css("--grid") } },
+      rightPriceScale: { borderColor: css("--rule") },
+      timeScale: { borderColor: css("--rule"), rightOffset: 3, timeVisible: !!hourly, secondsVisible: false, minBarSpacing: 0.05 },
+      crosshair: { mode: 0 },
+      localization: { locale: "en-US", priceFormatter: (x) => x.toFixed(dec) + unit, dateFormat: "yyyy-MM-dd" },
+    });
+    lwCharts[hostId] = chart;
+    const toTime = (t) => hourly ? Math.floor(Date.parse(t.replace(" ", "T") + "Z") / 1000) : t;
+    const inC = css("--inflow"), outC = css("--outflow");
+    const bars = [], avg = []; let sum = 0; const q = [];
+    for (let i = 0; i < src.t.length; i++) {
+      const v = src.v[i]; if (!isNum(v)) continue;
+      const time = toTime(src.t[i]);
+      bars.push({ time, value: v, color: v >= 0 ? inC : outC });
+      q.push(v); sum += v; if (q.length > win) sum -= q.shift();
+      if (q.length === win) avg.push({ time, value: sum / win });
+    }
+    const hs = chart.addHistogramSeries({ priceLineVisible: false, lastValueVisible: false, base: 0 });
+    hs.setData(bars);
+    const ls = chart.addLineSeries({ color: css("--ink"), lineWidth: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+    ls.setData(avg);
+    let es = null;
+    if (extra) {   // optional comparison line (e.g. Tether premium)
+      const ed = []; for (let i = 0; i < extra.t.length; i++) if (isNum(extra.v[i])) ed.push({ time: toTime(extra.t[i]), value: extra.v[i] });
+      es = chart.addLineSeries({ color: css(extra.color), lineWidth: 1.5, lineStyle: 0, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+      es.setData(ed);
+    }
+    if (zero) hs.createPriceLine({ price: 0, color: css("--ink-3"), lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
+    const lastT = bars.length ? bars[bars.length - 1].time : null;
+    if (lastT !== null) {
+      if (hourly) chart.timeScale().setVisibleRange({ from: lastT - 30 * 86400, to: lastT });
+      else if (Number(state.mktRange)) chart.timeScale().setVisibleRange({ from: new Date(new Date(lastT) - Number(state.mktRange) * 864e5).toISOString().slice(0, 10), to: lastT });
+      else chart.timeScale().fitContent();
+    }
+    const out = $("#" + readoutId);
+    const f = (v) => isNum(v) ? (v > 0 ? "+" : "") + fmt(v, dec + 1) + unit : "–";
+    const fmtT = (t) => typeof t === "number" ? new Date(t * 1000).toISOString().slice(0, 16).replace("T", " ") + " UTC" : t;
+    const show = (t, v, m, e) => { out.innerHTML = `<span class="ro-d">${fmtT(t)}</span> <b class="${signCls(v)}">${f(v)}</b> <span class="ro-m"><i style="background:var(--ink)"></i>${win}${hourly ? "h" : "d"} avg ${f(m)}</span>` +
+      (extra ? ` <span class="ro-m"><i style="background:var(${extra.color})"></i>${extra.label} ${f(e)}</span>` : ""); };
+    const latest = () => show(lastT, bars.length ? bars[bars.length - 1].value : null, avg.length ? avg[avg.length - 1].value : null, null);
+    latest();
+    chart.subscribeCrosshairMove((pp) => {
+      if (!pp || pp.time === undefined) return latest();
+      const b = pp.seriesData.get(hs), m = pp.seriesData.get(ls), e = es ? pp.seriesData.get(es) : null;
+      show(pp.time, b ? b.value : null, m ? m.value : null, e ? e.value : null);
+    });
+  }
+  const meanLast = (arr, n) => { const v = arr.slice(-n).filter(isNum); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
+  function renderCbPremium() {
+    const a = state.cbAsset || "BTC", X = D.xc && D.xc[a];
+    if (!X || !X.cbp_1d) { $("#cbp-card").hidden = true; return; }
+    const hourly = (state.cbTf || "1d") === "1h" && X.cbp_1h && X.cbp_1h.ts.length;
+    const src = hourly ? { t: X.cbp_1h.ts, v: X.cbp_1h.bp } : { t: X.cbp_1d.date, v: X.cbp_1d.bp };
+    premiumChart("cbp-chart", "cbp-readout", src, { hourly, unit: " bp", dec: 1, win: hourly ? 24 : 7 });
+    const lastH = X.cbp_1h ? lastVal(X.cbp_1h.bp) : null, last1d = lastVal(X.cbp_1d.bp);
+    $("#cbp-last").textContent = (isNum(lastH) ? fmt(lastH, 1) : fmt(last1d, 1)) + " bp";
+    const pos = X.cbp_1d.bp.slice(-30).filter((x) => isNum(x) && x > 0).length;
+    $("#cbp-stats").innerHTML = [["Latest hour", lastH], ["Yesterday", last1d], ["7-day avg", meanLast(X.cbp_1d.bp, 7)], ["30-day avg", meanLast(X.cbp_1d.bp, 30)]]
+      .map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v ${signCls(v)}">${isNum(v) ? (v > 0 ? "+" : "") + fmt(v, 1) + " bp" : "–"}</div></div>`).join("") +
+      `<div class="stat"><div class="k">Positive days, last 30</div><div class="v">${pos} / 30</div></div>`;
+  }
+  function renderKimchi() {
+    const a = state.kpAsset || "BTC", X = D.xc && D.xc[a];
+    if (!X || !X.kp_1d) { $("#kp-card").hidden = true; return; }
+    const hourly = (state.kpTf || "1d") === "1h" && X.kp_1h && X.kp_1h.ts.length;
+    const T = D.tether_kp;
+    const src = hourly ? { t: X.kp_1h.ts, v: X.kp_1h.pct } : { t: X.kp_1d.date, v: X.kp_1d.pct };
+    const extra = T ? { label: "Tether premium", color: "--s4", ...(hourly ? { t: T.h.ts, v: T.h.pct } : { t: T.d.date, v: T.d.pct }) } : null;
+    premiumChart("kp-chart", "kp-readout", src, { hourly, unit: "%", dec: 2, win: hourly ? 24 : 7, extra });
+    const lastH = X.kp_1h ? lastVal(X.kp_1h.pct) : null, last1d = lastVal(X.kp_1d.pct);
+    $("#kp-last").textContent = (isNum(lastH) ? fmt(lastH, 2) : fmt(last1d, 2)) + "%";
+    const pc = (v) => isNum(v) ? (v > 0 ? "+" : "") + fmt(v, 2) + "%" : "–";
+    const hi = Math.max(...X.kp_1d.pct.slice(-365).filter(isNum));
+    $("#kp-stats").innerHTML = [["Latest hour", lastH], ["Yesterday", last1d], ["7-day avg", meanLast(X.kp_1d.pct, 7)], ["30-day avg", meanLast(X.kp_1d.pct, 30)], ["Tether premium", T ? lastVal(T.h.pct) : null]]
+      .map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v ${signCls(v)}">${pc(v)}</div></div>`).join("") +
+      `<div class="stat"><div class="k">1-year high</div><div class="v">${pc(hi)}</div></div>`;
+    // spot volume by exchange (same asset)
+    if (X.spot_vol) {
+      const V = cut(X.spot_vol, sinceDays(X.spot_vol.date, Math.min(Number(state.mktRange) || 400, 400)));
+      const venues = [["binance", "Binance", "--s1"], ["coinbase", "Coinbase", "--s2"], ["upbit", "Upbit", "--s3"]];
+      stackedBars("sv-chart", V.date, venues.map(([k, l, c]) => ({ label: l, data: V[k], backgroundColor: css(c) })), { yFmt: (x) => "$" + fmt(x, 2) + "B" });
+      const tot = (k) => { const v = V[k].slice(-30).filter(isNum); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
+      const all = venues.reduce((s2, [k]) => s2 + (tot(k) || 0), 0);
+      $("#sv-legend").innerHTML = venues.map(([k, l, c]) => legendItem(css(c), `${l} $${fmt(tot(k), 2)}B/day · ${all ? fmt(100 * (tot(k) || 0) / all, 0) : "–"}%`, true)).join("");
+      $("#sv-title").textContent = `${a} spot volume by exchange`;
+    }
+  }
+
+  // ================================================================ Across exchanges (Derivatives tab)
+  const VENUES = [["binance", "Binance", "--s1"], ["okx", "OKX", "--s2"], ["bybit", "Bybit", "--s3"], ["hyperliquid", "Hyperliquid", "--s4"]];
+  function renderAcross(asset) {
+    const box = $("#dv-across"); const X = D.xc && D.xc[asset];
+    if (!box) return;
+    if (!X || !X.oi) { box.hidden = true; return; }
+    box.hidden = false;
+    const days = state.derivRange === "14h" ? 30 : (Number(state.derivRange) || 400);
+    const O = cut(X.oi, Math.max(0, X.oi.date.length - days));
+    const present = VENUES.filter(([k]) => (O[k] || []).some(isNum));
+    stackedBars("dv-oi-venue", O.date, present.map(([k, lbl, c]) => ({ label: lbl, data: O[k], backgroundColor: css(c) })), { yFmt: (x) => "$" + fmt(x, 2) + "B" });
+    const lastRow = O.date.length - 1;
+    const tot = present.reduce((t, [k]) => t + (isNum(O[k][lastRow]) ? O[k][lastRow] : 0), 0);
+    $("#dv-oi-venue-last").textContent = "$" + fmt(tot, 2) + "B tracked · " + O.date[lastRow];
+    $("#dv-oi-venue-legend").innerHTML = present.map(([k, lbl, c]) => legendItem(css(c), `${lbl} $${fmt(lastVal(O[k]), 2)}B`, true)).join("");
+    if (X.funding) {
+      const F = cut(X.funding, Math.max(0, X.funding.date.length - days));
+      const fp = VENUES.filter(([k]) => (F[k] || []).some(isNum));
+      line("dv-fund-venue", F.date, fp.map(([k, lbl, c]) => ({ label: lbl, data: F[k], borderColor: css(c), backgroundColor: css(c), borderWidth: 1.75 })), { yFmt: (x) => fmt(x, 2) + " bp" });
+      $("#dv-fund-venue-legend").innerHTML = fp.map(([k, lbl, c]) => legendItem(css(c), `${lbl} ${fmt(lastVal(F[k]), 2)} bp`)).join("");
+    }
+    if (X.cme && X.cme.date.length) {
+      const C = cut(X.cme, Math.max(0, X.cme.date.length - Math.ceil(days / 7) - 1));
+      const u = asset === "BTC" ? "BTC" : asset;
+      line("dv-cme", C.date, [
+        { label: "Open interest", data: C.oi, borderColor: css("--ink"), backgroundColor: css("--ink"), borderWidth: 2.25 },
+        { label: "Leveraged funds net", data: C.lev_net, borderColor: css("--s2"), backgroundColor: css("--s2") },
+        { label: "Asset managers net", data: C.am_net, borderColor: css("--s1"), backgroundColor: css("--s1") },
+      ], { yFmt: (x) => fmt(x, 0) + " " + u });
+      $("#dv-cme-last").textContent = fmt(lastVal(C.oi), 0) + " " + u + " OI · " + C.date[C.date.length - 1];
+      $("#dv-cme-card").hidden = false;
+    } else if ($("#dv-cme-card")) { $("#dv-cme-card").hidden = true; }
+  }
+
   // ================================================================ MARKET & MACRO
   function corr(xs, ys) {
     const p = []; for (let i = 0; i < xs.length; i++) if (isNum(xs[i]) && isNum(ys[i])) p.push([xs[i], ys[i]]);
@@ -498,13 +731,37 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
         <div class="readout" id="btc-readout"></div>
         <div class="chart main-chart" id="btc-main" role="img" aria-label="BTC candlestick chart with moving averages"></div>
         <div class="stats" id="btc-stats"></div>
-        <div class="note"><b>Bull market support band</b> = 20-week SMA and 21-week EMA. In bull markets BTC tends to hold above it; losing it on a weekly close has often marked the turn. The <b>200-week SMA</b> has historically been the bear-market floor; the <b>50-week SMA</b> is the mid-cycle line to watch. Weekly averages on the daily chart are live as of each day.</div>
+        <div class="note">Grey bars at the bottom: BTC spot volume on Binance + Coinbase + Upbit (USD). <b>Bull market support band</b> = 20-week SMA and 21-week EMA. In bull markets BTC tends to hold above it; losing it on a weekly close has often marked the turn. The <b>200-week SMA</b> has historically been the bear-market floor; the <b>50-week SMA</b> is the mid-cycle line to watch. Weekly averages on the daily chart are live as of each day.</div>
       </div>
       <div class="card">
         <div class="card-h"><h3>BTC dominance excluding stablecoins</h3><span class="last big" id="mk-dom-last"></span></div>
         <div class="legend">${legendItem(css("--s1"), "Ex-stablecoins: BTC ÷ (total − stablecoins)")}${legendItem(css("--ink-3"), "Standard BTC.D, for reference")}</div>
         <div class="chart tall"><canvas id="mk-dom" role="img" aria-label="BTC dominance excluding stablecoins"></canvas></div>
         <div class="stats" id="dom-stats"></div>
+      </div>
+      <div class="card" id="cbp-card">
+        <div class="card-h"><h3>Coinbase premium</h3><span class="last big" id="cbp-last"></span></div>
+        <div class="controls">${seg("cbAsset", ["BTC", "ETH", "SOL", "XRP"].map((x) => [x, x]), state.cbAsset || "BTC")}
+          ${seg("cbTf", [["1d", "Daily"], ["1h", "Hourly"]], state.cbTf || "1d")}<span class="last">drag to pan · scroll or pinch to zoom</span></div>
+        <div class="readout" id="cbp-readout"></div>
+        <div class="chart tall" id="cbp-chart" role="img" aria-label="Coinbase premium"></div>
+        <div class="stats" id="cbp-stats"></div>
+        <div class="note">Coinbase USD price vs Binance USDT price (converted to USD with Coinbase's USDT/USD), in basis points. <b>Positive</b> = US buyers paying more than offshore buyers, often alongside ETF inflows. The line is the 7-day (daily view) or 24-hour (hourly view) average. Hourly history covers the last 180 days.</div>
+      </div>
+      <div class="card" id="kp-card">
+        <div class="card-h"><h3>Kimchi premium (Upbit)</h3><span class="last big" id="kp-last"></span></div>
+        <div class="controls">${seg("kpAsset", ["BTC", "ETH", "SOL", "XRP"].map((x) => [x, x]), state.kpAsset || "BTC")}
+          ${seg("kpTf", [["1d", "Daily"], ["1h", "Hourly"]], state.kpTf || "1d")}<span class="last">drag to pan · scroll or pinch to zoom</span></div>
+        <div class="readout" id="kp-readout"></div>
+        <div class="chart tall" id="kp-chart" role="img" aria-label="Kimchi premium"></div>
+        <div class="stats" id="kp-stats"></div>
+        <div class="note">Upbit KRW price vs Binance USDT price converted at the USD/KRW rate, in percent. <b>High positive</b> (several %) = Korean retail chasing, historically common near local tops (spring 2021 hit ~20%). The yellow line is the <b>Tether premium</b>: USDT on Upbit vs USD/KRW, a pure measure of Korean demand for crypto dollars.</div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3 id="sv-title">Spot volume by exchange</h3><span class="last">daily, USD · 30-day average share</span></div>
+        <div class="legend" id="sv-legend"></div>
+        <div class="chart tall"><canvas id="sv-chart" role="img" aria-label="Spot volume by exchange"></canvas></div>
+        <div class="note">Binance and Coinbase in their own quote currency; Upbit converted from KRW. Follows the asset picked in the Kimchi premium card.</div>
       </div>
       <div><span class="eyebrow">Market structure</span><h2>Where crypto money sits</h2>
       <p class="sub">TOTAL3 is total crypto market cap excluding BTC and ETH (TradingView). Stablecoin supply from DefiLlama.</p></div>
@@ -528,6 +785,8 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
       <div class="note">Read +0.30 as "tends to move with BTC", −0.30 as "tends to move against it". Values near zero mean no reliable daily link. Correlations shift over time; compare the windows.</div></div>`;
 
     renderBtcChart();
+    renderCbPremium();
+    renderKimchi();
     const L = m.date;
     line("mk-dom", L, [
       { label: "Ex-stablecoins", data: m.btc_d_ex, borderColor: css("--s1"), backgroundColor: css("--s1"), borderWidth: 2.5 },
@@ -574,6 +833,7 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
     { key: "taker",       label: "Taker buy/sell",      color: "--s4", fmt: (x) => fmt(x, 2), on: false },
     { key: "premium_bp",  label: "Perp premium",        color: "--s5", fmt: (x) => fmt(x, 1) + " bp", on: false },
     { key: "basis_bp",    label: "Basis vs spot",       color: "--s7", fmt: (x) => fmt(x, 1) + " bp", on: false, dailyOnly: true },
+    { key: "vol",         label: "Futures volume",      color: "--s6", fmt: (x) => "$" + fmt(x, 2) + "B", on: false },
   ];
   const rescale = (arr) => {
     const v = arr.filter(isNum); if (!v.length) return arr.map(() => null);
@@ -630,6 +890,23 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
           `<button class="tgl" data-series="${s.key}" aria-pressed="${!!state.derivOn[s.key]}"><i style="background:var(${s.color})"></i>${s.label}</button>`).join("")}</div>
         <div class="chart xtall"><canvas id="dv-overlay" role="img" aria-label="${asset} price, open interest and positioning overlay"></canvas></div>
       </div>
+      <section id="dv-across" class="view" style="padding-top:0">
+        <div><span class="eyebrow">Across exchanges · ${asset}</span><h2>Open interest and funding by exchange</h2>
+        <p class="sub">"Tracked OI" covers Binance, OKX, Bybit and Hyperliquid, not the whole market. OKX keeps 180 days of OI history and Hyperliquid has none, so those bars fill in as the hourly job collects them.</p></div>
+        <div class="card"><div class="card-h"><h3>Open interest by exchange</h3><span class="last" id="dv-oi-venue-last"></span></div>
+          <div class="legend" id="dv-oi-venue-legend"></div>
+          <div class="chart tall"><canvas id="dv-oi-venue" role="img" aria-label="Open interest by exchange"></canvas></div></div>
+        <div class="grid two">
+          <div class="card"><div class="card-h"><h3>Funding by exchange (per 8h)</h3><span class="last">daily average, bp</span></div>
+            <div class="legend" id="dv-fund-venue-legend"></div>
+            <div class="chart"><canvas id="dv-fund-venue" role="img" aria-label="Funding by exchange"></canvas></div>
+            <div class="note">1 bp per 8h is the default "neutral" rate. Higher = longs paying up; negative = shorts paying longs. Hyperliquid pays hourly and is scaled to 8h here.</div></div>
+          <div class="card" id="dv-cme-card"><div class="card-h"><h3>CME futures positioning (weekly)</h3><span class="last" id="dv-cme-last"></span></div>
+            <div class="legend">${legendItem(css("--ink"), "Open interest")}${legendItem(css("--s2"), "Leveraged funds net")}${legendItem(css("--s1"), "Asset managers net")}</div>
+            <div class="chart"><canvas id="dv-cme" role="img" aria-label="CME positioning"></canvas></div>
+            <div class="note">CFTC Traders in Financial Futures report, converted from contracts to coins. Leveraged funds (hedge funds) often run the basis trade, so their net short tracks ETF buying.</div></div>
+        </div>
+      </section>
       <details class="card" ${state.derivDetails ? "open" : ""} id="dv-details"><summary><h3 style="display:inline">Each series on its own scale</h3></summary>
         <div class="grid" style="margin-top:10px">
           ${card("dv-px", asset + " spot price")}
@@ -664,18 +941,786 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
     const det = $("#dv-details");
     if (det.open) drawDetails();
     det.addEventListener("toggle", () => { state.derivDetails = det.open; save(); if (det.open) drawDetails(); });
+    renderAcross(asset);
   }
 
   document.addEventListener("click", (ev) => {
-    const b = ev.target.closest("button.tgl"); if (!b) return;
+    const b = ev.target.closest("button.tgl[data-series]"); if (!b || !state.derivOn) return;
     const k = b.dataset.series; state.derivOn[k] = !state.derivOn[k]; save();
     b.setAttribute("aria-pressed", String(state.derivOn[k]));
     const ch = charts["dv-overlay"]; if (!ch) return;
     const ds = ch.data.datasets.find((d) => d.label === b.textContent.trim()); if (ds) { ds.hidden = !state.derivOn[k]; ch.update("none"); }
   });
 
+  // ================================================================ COIN PAGES (BTC ETH XRP SOL ZEC)
+  // Candles + indicators come precomputed from coins/<SYM>.json (mdh/indicators.py); the page only draws them.
+  const COIN_CACHE = {};
+  let coinCharts = [];
+  const COIN_TF = [["4h", "4H"], ["1d", "1D"], ["1w", "1W"], ["1M", "1M"]];
+  const COIN_RANGE = { "4h": 90, "1d": 365, "1w": 365 * 4, "1M": 0 };   // default visible window, days (0 = all)
+  const MA_COLORS = { 20: "--s1", 30: "--s3", 50: "--s2", 100: "--s7" };
+  const TF_WORD = { "4h": "4-hour", "1d": "daily", "1w": "weekly", "1M": "monthly" };
+  const loadCoin = (a) => COIN_CACHE[a] || (COIN_CACHE[a] = fetch(`coins/${a}.json`, { cache: "no-store" })
+    .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .catch((e) => { delete COIN_CACHE[a]; throw e; }));
+  const fmtUsd = (x) => !isNum(x) ? "–" : (x < 0 ? "−$" : "$") + (Math.abs(x) >= 1e9 ? fmt(Math.abs(x) / 1e9, 2) + "B" : Math.abs(x) >= 1e6 ? fmt(Math.abs(x) / 1e6, 1) + "M" : fmt(Math.abs(x) / 1e3, 0) + "K");
+  const fmtSignedUsd = (x) => !isNum(x) ? "–" : (x > 0 ? "+" : "") + fmtUsd(x);
+  const fmtCoin = (x) => !isNum(x) ? "–" : x >= 1e6 ? fmt(x / 1e6, 2) + "M" : x >= 1e3 ? fmt(x / 1e3, 1) + "K" : fmt(x, 0);
+  const pxDec = (c) => { const v = c.find(isNum) || 1; return v >= 1000 ? 0 : v >= 10 ? 2 : 4; };
+
+  function coinShell(a) {
+    const S = (D.coins || {})[a];
+    const d1 = S && S.tf["1d"], dv = S && S.deriv;
+    const t = (k, v, d) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="d">${d}</div></div>`;
+    const tiles = !S ? "" : `<div class="tiles">
+      ${t("Price · live", fmtPx(d1.close), `<span class="${signCls(d1.chg_pct)}">${sgn(d1.chg_pct)}</span> 24h` + (S.live && isNum(S.live.chg7_pct) ? ` · <span class="${signCls(S.live.chg7_pct)}">${sgn(S.live.chg7_pct, 1)}</span> 7d` : ""))}
+      ${t("RSI 14 · daily", fmt(d1.rsi, 0), d1.rsi >= 70 ? "overbought" : d1.rsi <= 30 ? "oversold" : "neutral 30–70")}
+      ${t("MACD · daily", d1.macd_side === "bull" ? "Above signal" : "Below signal", isNum(d1.macd_cross_bars_ago) ? `crossed ${d1.macd_cross_bars_ago} day${d1.macd_cross_bars_ago === 1 ? "" : "s"} ago` : "")}
+      ${dv ? t("Open interest", fmtCoin(dv.oi) + " " + a, `<span class="${signCls(dv.oi_chg7_pct)}">${sgn(dv.oi_chg7_pct, 1)}</span> 7d · ${fmtUsd(dv.oi_usd)}`) : ""}
+      ${dv ? (dv.funding ? t("Funding · per 8h", sgn(dv.funding.last_bp8, 2, " bp"), `7d avg ${sgn(dv.funding.avg7_bp8, 2, " bp")} · default +1 bp` + (isNum(dv.funding.est_next_bp8) ? ` · next ≈ ${sgn(dv.funding.est_next_bp8, 2, " bp")}` : ""))
+                         : t("Funding · 7d avg", sgn(dv.funding_apr_7d, 1), "a year · default ≈ 11%")) : ""}
+      ${dv ? t("CVD · 7d", `<span class="${signCls(dv.spot_cvd_7d)}">${fmtSignedUsd(dv.spot_cvd_7d)}</span>`, `spot · perp <span class="${signCls(dv.perp_cvd_7d)}">${fmtSignedUsd(dv.perp_cvd_7d)}</span>`) : ""}
+    </div>`;
+    const says = S && S.readout && S.readout.length ? `<div class="card"><div class="card-h"><h3>What the numbers say</h3><span class="last">last closed candle</span></div>
+      <ul class="says">${S.readout.map((x) => `<li class="${x.tone}"><span><b>${x.k}:</b> ${x.text}</span></li>`).join("")}</ul></div>` : "";
+    return `
+      <div class="coin-head">
+        <div><span class="eyebrow">Binance spot ${a}USDT · perpetual for funding, OI, perp CVD${S && S.spot_note ? " · " + S.spot_note : ""}</span>
+          <div class="px" id="coin-px">${S ? fmtPx(d1.close) : ""}</div></div>
+        <div class="controls">
+          ${seg("coinTf", COIN_TF, state.coinTf)}
+          ${seg("coinMa", [["sma", "SMA"], ["ema", "EMA"]], state.coinMa)}
+          ${seg("coinScale", [["log", "Log"], ["lin", "Linear"]], state.coinScale)}
+          ${S && S.fib ? seg("coinFib", [["on", "Fib"], ["off", "No fib"]], state.coinFib || "on") : ""}
+        </div>
+      </div>
+      ${tiles}
+      ${says}
+      ${sigCard(a, S)}
+      ${intentsCard(a, S)}
+      ${whaleCard(a, S)}
+      <div class="card main">
+        <div class="card-h"><h3 id="coin-title">${a} · ${TF_WORD[state.coinTf]} candles</h3><span class="last" id="coin-status">Loading…</span></div>
+        <div class="readout" id="coin-readout"></div>
+        <div class="stack" id="coin-stack">
+          <div class="pane price" id="cp-price"><span class="tag">Price · MA 20/30/50/100 · spot volume</span></div>
+          <div class="pane low" id="cp-macd"><span class="tag">MACD 12 26 9</span></div>
+          <div class="pane low" id="cp-rsi"><span class="tag">RSI 14</span></div>
+          <div class="pane low" id="cp-fund"><span class="tag">Funding · % a year</span></div>
+          <div class="pane low" id="cp-oi"><span class="tag">Open interest · ${a}</span></div>
+          <div class="pane low" id="cp-cvd"><span class="tag">CVD from first visible candle · spot / perp</span></div>
+        </div>
+        <div class="legend">
+          ${[20, 30, 50, 100].map((n) => legendItem(`var(${MA_COLORS[n]})`, `${state.coinMa.toUpperCase()} ${n}`)).join("")}
+          ${legendItem("var(--s1)", "MACD")}${legendItem("var(--s2)", "Signal")}
+          ${legendItem("var(--s1)", "Spot CVD")}${legendItem("var(--s2)", "Perp CVD")}
+        </div>
+      </div>
+      ${fibCard(a, S)}
+      ${xbCard(a, S)}
+      ${relCard(a, S)}
+      <details class="card"><summary><b>How these are calculated</b></summary>
+        <div class="formulas">
+          <div>Candles use Binance's UTC boundaries: 4H at 00/04/08/12/16/20 UTC, days at 00:00 UTC, weeks from Monday 00:00 UTC, months from the 1st. The newest candle is still forming; the readout and signals use the last closed one.</div>
+          <div><code>SMA(n)</code> mean of the last n closes. <code>EMA(n)</code> weight 2/(n+1), seeded with the first close, shown once n candles exist. Same definitions as TradingView's <code>ta.sma</code> / <code>ta.ema</code>.</div>
+          <div><code>MACD</code> = EMA12 − EMA26 of the close, <code>signal</code> = EMA9 of MACD, bars = MACD − signal. Calculated over the full history so the start-up period has washed out. Values differ from other charts only when their candles differ (exchange, spot vs perpetual, time zone of the daily close).</div>
+          <div><code>RSI 14</code> Wilder's method (smoothing 1/14). <code>Funding</code> = sum of Binance funding settlements inside the candle, shown as a yearly rate. <code>Open interest</code> = contracts open at the candle's close. <code>CVD</code> = running total of taker buys − taker sells (USD), from Binance kline taker-buy volume.</div>
+        </div>
+      </details>`;
+  }
+
+  // ---------- rebound signals (math in mdh/indicators.py rebound_signals; closed UTC days)
+  const SIG_ROWS = [
+    ["flush", "Leverage flushed", "OI at least 15% below its 14-day high"],
+    ["shorts", "Shorts crowded", "funding below 0, or top traders' long/short 15%+ off its 14-day high"],
+    ["us", "US buying", "Coinbase premium, day average, +3 bp or more"],
+    ["spot", "Spot buying", "Binance spot net taker buying two days running"],
+    ["etf", "ETF inflows", "US spot ETF net inflow over the last 3 sessions, last one positive"],
+    ["reclaim", "Price back above its week", "daily close above its 7-day average"],
+  ];
+  const SIG_COLOR = { 2: "var(--up)", 1: "var(--s4)", 0: "var(--down)" };
+  const SIG_WORD = { 2: "green", 1: "amber", 0: "red" };
+  function sigCard(a, S) {
+    const G = S && S.sig; if (!G) return "";
+    const v = G.values, st = G.status;
+    const val = {
+      flush: `OI ${sgn(v.oi_vs_high_pct, 0)} vs its 14-day high`,
+      shorts: `funding ${sgn(v.fund8_3d_bp, 2, " bp")}/8h (3-day avg)` + (isNum(v.top_ls) ? ` · top traders L/S ${fmt(v.top_ls, 2)} (${sgn(v.top_vs_high_pct, 0)} vs 14d high)` : ""),
+      us: isNum(v.cb_prem_bp) ? `${sgn(v.cb_prem_bp, 1, " bp")} on ${G.t}` + (isNum(v.cb_prem_24h_bp) ? ` · last 24h ${sgn(v.cb_prem_24h_bp, 1, " bp")}` : "") : "no Coinbase data yet",
+      spot: `${fmtSignedUsd(v.cvd_last)} on ${G.t} · ${fmtSignedUsd(v.cvd_prev)} the day before`,
+      etf: isNum(v.etf_3) ? `${fmtSignedUsd(v.etf_last)} last session · ${fmtSignedUsd(v.etf_3)} over 3` : (a === "ZEC" ? "Grayscale ZCSH flows aren't in our ETF source yet" : "no US spot ETF data"),
+      reclaim: `close ${sgn(v.close_vs_7d_pct, 1)} vs 7-day average · ${sgn(v.chg7_pct, 1)} on the week`,
+    };
+    const stage = G.stage === "setup" ? `<span class="pill" style="background:color-mix(in srgb, var(--s4) 22%, transparent);color:var(--ink)">Setup forming</span>`
+      : G.stage === "confirmed" ? `<span class="pill" style="background:color-mix(in srgb, var(--up) 22%, transparent);color:var(--ink)">Confirmed</span>` : `<span class="pill">Not yet</span>`;
+    const rows = SIG_ROWS.map(([k, name, rule]) => {
+      const s = st[k], c = s == null ? "var(--ink-3)" : SIG_COLOR[s];
+      return `<li><i class="sig-dot" style="background:${c}" title="${s == null ? "no data" : SIG_WORD[s]}"></i>
+        <div><b>${name}</b> <span class="sig-v">${val[k]}</span><div class="sig-r">${rule}</div></div></li>`;
+    }).join("");
+    return `
+      <div class="card" id="sig-card">
+        <div class="card-h"><h3>Rebound signals · ${G.greens} of ${G.available} green ${stage}</h3><span class="last">closed day ${G.t} · UTC</span></div>
+        <ul class="sig-list">${rows}</ul>
+        <div class="pane low" id="sp-hist" style="height:150px"><span class="tag">Green signals per day: grey ≤ 2 · amber 3 · green 4+ · line = ${a} close (log)</span></div>
+        <div class="readout" id="sig-readout"></div>
+        <div class="note">A checklist of what brought ZEC back from its September pullbacks: leverage washed out, shorts piling in, US and Binance spot buyers stepping up, ETF money, then price reclaiming its week. <b>Setup forming</b> = at least 3 of the flow and positioning checks are green while price is still below its 7-day average (buyers arriving before price turns). <b>Confirmed</b> = the same plus price back above it. It describes conditions; it has not been tested as a trading rule.</div>
+      </div>`;
+  }
+  function drawSig(a, J) {
+    const LC = window.LightweightCharts, G = J.sig; if (!LC || !G || !$("#sp-hist")) return [];
+    const ink2 = css("--ink-2"), grid = css("--grid"), rule = css("--rule"), panel = css("--panel");
+    const ch = LC.createChart($("#sp-hist"), { autoSize: true,
+      layout: { background: { type: "solid", color: panel }, textColor: ink2, fontFamily: "'IBM Plex Mono', ui-monospace, Menlo, monospace", fontSize: 11 },
+      grid: { vertLines: { visible: false }, horzLines: { color: grid } },
+      leftPriceScale: { visible: true, borderColor: rule, scaleMargins: { top: 0.15, bottom: 0 } },
+      rightPriceScale: { borderColor: rule, mode: 1, minimumWidth: 78 }, timeScale: { borderColor: rule, rightOffset: 2 },
+      crosshair: { mode: 0 }, localization: { locale: "en-US" } });
+    const colr = (g, n) => g >= 4 ? css("--up") : g === 3 ? css("--s4") : css("--ink-3");
+    const bars = ch.addHistogramSeries({ priceScaleId: "left", priceLineVisible: false, lastValueVisible: false, priceFormat: { type: "price", precision: 0, minMove: 1 } });
+    bars.setData(G.t.map((t, i) => ({ time: t, value: G.greens[i], color: colr(G.greens[i], G.avail[i]) })));
+    const px = ch.addLineSeries({ color: css("--ink"), lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+      priceFormat: { type: "price", precision: pxDec(G.close), minMove: Math.pow(10, -pxDec(G.close)) } });
+    px.setData(G.t.map((t, i) => isNum(G.close[i]) ? { time: t, value: G.close[i] } : { time: t }));
+    const n = G.t.length, out = $("#sig-readout");
+    const show = (i) => { if (i < 0) return;
+      const dots = SIG_ROWS.map(([k, name]) => { const s = G[k][i]; return `<span class="ro-m"><i style="background:${s == null ? "var(--ink-3)" : SIG_COLOR[s]};width:8px;height:8px;border-radius:50%"></i>${name.split(" ")[0]}</span>`; }).join("");
+      out.innerHTML = `<span class="ro-d">${new Date(G.t[i] * 1000).toISOString().slice(0, 10)}</span> <b>${G.greens[i]} of ${G.avail[i]} green</b> <span>close ${fmtPx(G.close[i])}</span>${dots}`; };
+    ch.subscribeCrosshairMove((p) => { if (!p || !p.time) return show(n - 1); show(G.t.indexOf(p.time)); });
+    const from = Math.max(0, n - 120); ch.timeScale().setVisibleLogicalRange({ from: from - 0.5, to: n - 0.5 + 2 });
+    show(n - 1);
+    return [ch];
+  }
+
+  // ---------- relative strength vs BTC (daily, closed days; math in mdh/indicators.py vs_btc)
+  const relDate = (iso) => iso ? iso : "–";
+  function relCard(a, S) {
+    const R = S && S.rel; if (!R) return "";
+    const t = (k, v, d) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="d">${d}</div></div>`;
+    const eps = (R.episodes || []).slice().reverse();
+    const rows = eps.map((e) => `<tr><td>${e.start} → ${e.end || "<b>now</b>"}</td><td>${fmt(e.total_days, 0)}d</td>
+      <td class="neg">${sgn(e.bleed_pct, 0)}</td><td>${fmt(e.bleed_days, 0)}d → ${e.trough}</td>
+      <td class="${e.end ? "pos" : signCls(e.catch_pct) === "up" ? "pos" : "neg"}">${sgn(e.catch_pct, 0)}</td><td>${fmt(e.catch_days, 0)}d${e.end ? "" : " so far"}</td></tr>`).join("");
+    return `
+      <div class="card" id="rel-card">
+        <div class="card-h"><h3>${a} vs BTC</h3><span class="last">daily closes · Binance spot · through ${R.t}</span></div>
+        <div class="tiles">
+          ${t(`${a}/BTC ratio`, fmt(R.ratio * (R.ratio < 1e-4 ? 1e8 : 1), R.ratio < 1e-4 ? 0 : 6) + (R.ratio < 1e-4 ? " sats" : ""), `<span class="${signCls(R.chg30_pct)}">${sgn(R.chg30_pct, 1)}</span> 30d · <span class="${signCls(R.chg90_pct)}">${sgn(R.chg90_pct, 1)}</span> 90d`)}
+          ${t("Since last 1-year high", R.days_since === 0 ? "New high" : fmt(R.days_since, 0) + " days", R.days_since === 0 ? "ratio at its highest in 365 days" : `high on ${R.last_high}` + (R.median_total_days ? ` · past median ${fmt(R.median_total_days, 0)}d` : ""))}
+          ${t("Below that high", `<span class="${signCls(R.dd_pct)}">${sgn(R.dd_pct, 0)}</span>`, R.median_bleed_pct != null ? `past stretches: median low ${sgn(R.median_bleed_pct, 0)}` : "")}
+          ${t("Beta · 60d", fmt(R.beta60, 2), `BTC explains ${fmt(R.r2_60 * 100, 0)}% of daily moves`)}
+          ${t("After beta · 60d", `<span class="${signCls(R.alpha60_pct)}">${sgn(R.alpha60_pct, 0)}</span>`, "return not explained by BTC × beta")}
+          ${R.streak200 != null ? (() => {
+            const L = R.live, v = L && isNum(L.vs_ma200_pct) ? L.vs_ma200_pct : R.vs_ma200_pct;
+            const when = L && L.as_of ? "live " + new Date(L.as_of + (L.as_of.endsWith("Z") ? "" : "Z")).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) : "last close";
+            const st = R.streak200, tries = R.tries90 || [], prev = tries.filter((x) => !x.running);
+            return t("vs 200-day line", `<span class="${signCls(v)}">${sgn(v, 1)}</span>`,
+              `${when} · <b>${Math.abs(st)}</b> close${Math.abs(st) === 1 ? "" : "s"} ${st > 0 ? "above" : "below"} in a row` +
+              ` · 50d vs 200d <span class="${signCls(R.ma50_vs_200_pct)}">${sgn(R.ma50_vs_200_pct, 1)}</span>` +
+              (tries.length ? ` · ${tries.length} cross${tries.length === 1 ? "" : "es"} up in 90d${prev.length ? ", longest " + Math.max(...prev.map((x) => x.days)) + "d" : ""}` : ""));
+          })() : ""}
+        </div>
+        <div class="stack" id="rel-stack" style="margin-top:12px">
+          <div class="pane price" id="rp-ratio" style="height:300px"><span class="tag">${a}/BTC · log · dashed = 365-day high · dotted = 200-day average</span></div>
+          <div class="pane low" id="rp-dd"><span class="tag">% below last 1-year high</span></div>
+          <div class="pane low" id="rp-beta"><span class="tag">60-day beta · BTC-explained share (R²)</span></div>
+        </div>
+        <div class="legend">${legendItem("var(--s1)", `${a}/BTC`)}${legendItem("var(--ink-3)", "365-day high")}${legendItem("var(--s3)", "200-day avg")}${legendItem("var(--s2)", "Beta 60d")}${legendItem("var(--s7)", "R² 60d")}</div>
+        <div class="readout" id="rel-readout"></div>
+        ${rows ? `<details class="card" style="margin-top:10px;padding:10px 12px"><summary><b>Past stretches without a new 1-year high (≥ 90 days)</b></summary>
+          <div class="tbl-wrap"><table><thead><tr><th>From high → next high</th><th>Length</th><th>Deepest</th><th>Bleed to low</th><th>Low → high</th><th>Catch-up</th></tr></thead><tbody>${rows}</tbody></table></div>
+          <div class="note">A stretch starts at a close where the ${a}/BTC ratio was its highest of the past 365 days and ends at the next such close. "Deepest" is the ratio's low in between; "Catch-up" is the move from that low to the new high. Latest first; a row ending in "now" is still running.</div></details>` : ""}
+        <div class="note"><b>Beta</b>: how much ${a} moves per 1% BTC move (daily log returns, 60 days). <b>R²</b>: share of ${a}'s daily swings that BTC explains; low R² means more of its own moves. <b>After beta</b>: ${a}'s 60-day return minus beta × BTC's, i.e. out/under-performance BTC doesn't account for. <b>200-day line</b>: the ratio vs its own 200-day average; the streak counts closed UTC days, the % uses the live price when available. Most crosses back above fail within days; a close above held for weeks, and the 50-day average turning above the 200-day, mark a real turn.</div>
+      </div>`;
+  }
+
+  function drawRel(a, J) {
+    const LC = window.LightweightCharts, R = J.rel; if (!LC || !R || !$("#rp-ratio")) return [];
+    const ink2 = css("--ink-2"), grid = css("--grid"), rule = css("--rule"), panel = css("--panel");
+    const T = R.t, n = T.length;
+    const mk = (el, extra = {}) => LC.createChart(el, Object.assign({
+      autoSize: true, layout: { background: { type: "solid", color: panel }, textColor: ink2, fontFamily: "'IBM Plex Mono', ui-monospace, Menlo, monospace", fontSize: 11 },
+      grid: { vertLines: { visible: false }, horzLines: { color: grid } }, rightPriceScale: { borderColor: rule, minimumWidth: 78 },
+      timeScale: { borderColor: rule, rightOffset: 3, visible: false }, crosshair: { mode: 0 }, localization: { locale: "en-US" } }, extra));
+    const pts = (arr) => T.map((t, i) => isNum(arr[i]) ? { time: t, value: arr[i] } : { time: t });
+    const noMarks = { priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false };
+    const small = R.ratio.find(isNum) < 1e-4, k = small ? 1e8 : 1, rf = (x) => small ? fmt(x, 0) + " sat" : fmt(x, 6);
+    const scaled = R.ratio.map((v) => isNum(v) ? v * k : null), hi = R.hi.map((v) => isNum(v) ? v * k : null);
+    const c1 = mk($("#rp-ratio"), { rightPriceScale: { borderColor: rule, minimumWidth: 78, mode: 1 }, localization: { locale: "en-US", priceFormatter: rf } });
+    const sR = c1.addLineSeries({ color: css("--s1"), lineWidth: 2, priceLineVisible: false });
+    sR.setData(pts(scaled));
+    c1.addLineSeries({ color: css("--ink-3"), lineWidth: 1, lineStyle: 2, ...noMarks }).setData(pts(hi));
+    if (R.ma200) c1.addLineSeries({ color: css("--s3"), lineWidth: 1.5, lineStyle: 1, ...noMarks }).setData(pts(R.ma200.map((v) => isNum(v) ? v * k : null)));
+    const c2 = mk($("#rp-dd"), { localization: { locale: "en-US", priceFormatter: (x) => fmt(x, 0) + "%" } });
+    const sD = c2.addAreaSeries({ lineColor: css("--down"), topColor: "transparent", bottomColor: "transparent", lineWidth: 1.5, ...noMarks });
+    sD.setData(pts(R.dd));
+    const c3 = mk($("#rp-beta"), { timeScale: { borderColor: rule, rightOffset: 3, visible: true } });
+    const sB = c3.addLineSeries({ color: css("--s2"), lineWidth: 1.5, ...noMarks });
+    sB.setData(pts(R.beta));
+    const sQ = c3.addLineSeries({ color: css("--s7"), lineWidth: 1.5, ...noMarks });
+    sQ.setData(pts(R.r2));
+    sB.createPriceLine({ price: 1, color: css("--ink-3"), lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: "" });
+    const all = [c1, c2, c3];
+    const ser = new Map([[c1, [sR, (i) => scaled[i]]], [c2, [sD, (i) => R.dd[i]]], [c3, [sB, (i) => R.beta[i]]]]);
+    const out = $("#rel-readout");
+    const show = (i) => { if (i < 0) return; out.innerHTML = `<span class="ro-d">${new Date(T[i] * 1000).toISOString().slice(0, 10)}</span> <b>${a}/BTC ${rf(scaled[i])}</b>` +
+      ` <span>1y high ${rf(hi[i])}</span> <span>${isNum(R.dd[i]) ? sgn(R.dd[i], 1) : "–"} from last high</span>` +
+      ` <span>beta ${isNum(R.beta[i]) ? fmt(R.beta[i], 2) : "–"}</span> <span>R² ${isNum(R.r2[i]) ? fmt(R.r2[i], 2) : "–"}</span>`; };
+    let syncing = false;
+    for (const c of all) {
+      c.timeScale().subscribeVisibleLogicalRangeChange((r) => { if (!r || syncing) return; syncing = true; for (const o of all) if (o !== c) o.timeScale().setVisibleLogicalRange(r); syncing = false; });
+      c.subscribeCrosshairMove((p) => {
+        if (syncing) return; syncing = true;
+        if (!p || !p.time) { for (const o of all) if (o !== c) o.clearCrosshairPosition(); show(n - 1); }
+        else { const i = T.indexOf(p.time); for (const o of all) if (o !== c) { const [s, v] = ser.get(o); const val = v(i); if (isNum(val)) o.setCrosshairPosition(val, p.time, s); else o.clearCrosshairPosition(); } show(i); }
+        syncing = false;
+      });
+    }
+    let from = 0; const cutT = T[n - 1] - 365 * 3 * 86400; while (from < n - 1 && T[from] < cutT) from++;
+    for (const c of all) c.timeScale().setVisibleLogicalRange({ from: from - 0.5, to: n - 0.5 + 3 });
+    show(n - 1);
+    return all;
+  }
+
+  // ---------- Fibonacci retracement + trend channel (math in mdh/indicators.py fib_levels; live daily frame)
+  const FIB_COLOR = { 0: "--ink-3", 0.236: "--down", 0.382: "--s4", 0.5: "--s3", 0.618: "--s1", 0.786: "--s7", 1: "--ink-3", 1.618: "--s5" };
+  function fibCard(a, S) {
+    const F = S && S.fib; if (!F) return "";
+    const up = F.dir === "up";
+    const rows = F.levels.map((l) => { const d = (l.p / F.price - 1) * 100;
+      const near = F.support && l.r === F.support.r || F.resist && l.r === F.resist.r;
+      return `<tr${near ? ' style="font-weight:600"' : ""}><td style="text-align:left"><i style="display:inline-block;width:10px;height:3px;background:var(${FIB_COLOR[l.r] || "--ink-3"});vertical-align:middle;margin-right:6px"></i>${l.r}</td><td>${fmtPx(l.p)}</td><td class="${d >= 0 ? "pos" : "neg"}">${sgn(d, 1)}</td></tr>`; }).join("");
+    const ch = F.ch;
+    return `
+      <div class="card" id="fib-card">
+        <div class="card-h"><h3>Fibonacci retracement · ${up ? "up" : "down"}-swing</h3><span class="last">daily · ${F.low_t} → ${F.high_t}</span></div>
+        <div class="tiles">
+          <div class="tile"><div class="k">Swing</div><div class="v">${fmtPx(up ? F.low : F.high)} → ${fmtPx(up ? F.high : F.low)}</div><div class="d">${up ? F.low_t + " low → " + F.high_t + " high" : F.high_t + " high → " + F.low_t + " low"}</div></div>
+          <div class="tile"><div class="k">Given back</div><div class="v">${fmt(F.retrace_pct, 0)}%</div><div class="d">of the swing, at ${fmtPx(F.price)}</div></div>
+          ${F.support ? `<div class="tile"><div class="k">Next level below</div><div class="v">${fmtPx(F.support.p)}</div><div class="d">${F.support.r} · ${sgn((F.support.p / F.price - 1) * 100, 1)}</div></div>` : ""}
+          ${ch ? `<div class="tile"><div class="k">Trend channel</div><div class="v">${sgn(ch.slope_pct_day, 2)}/day</div><div class="d">${fmtPx(ch.lo)} – ${fmtPx(ch.up)} · at ${fmt(ch.pos * 100, 0)}% of width</div></div>` : ""}
+        </div>
+        <div class="tbl-wrap"><table><thead><tr><th style="text-align:left">Level</th><th>Price</th><th>From price</th></tr></thead><tbody>${rows}</tbody></table></div>
+        <div class="note">Levels are drawn on the candle chart below (toggle "Fib"). Rule: the swing's end is the most recent of the highest high / lowest low of the last 90 days; its start is the opposite extreme in the 60 days before that. ${up ? "Level = high − ratio × (high − low)" : "Level = low + ratio × (high − low)"}: 0 = swing end, 1 = swing start, 1.618 = extension. Channel: straight line through log closes from the swing start, ± 2 standard deviations. Other charts that pick different swing points (or another exchange's candles) will show slightly different levels.</div>
+      </div>`;
+  }
+
+  // ---------- exchange balances (DefiLlama CEX data; math in mdh/dashboard/onchain.py exchange_balance)
+  const EX_NAME = { "binance-cex": "Binance", okx: "OKX", bitfinex: "Bitfinex", bybit: "Bybit", robinhood: "Robinhood", gate: "Gate", bitget: "Bitget", gemini: "Gemini", mexc: "MEXC", deribit: "Deribit", htx: "HTX", bitstamp: "Bitstamp", kucoin: "KuCoin", "crypto-com": "Crypto.com", swissborg: "SwissBorg", bitkub: "Bitkub", "hashkey-exchange": "HashKey", backpack: "Backpack", bitvavo: "Bitvavo", bingx: "BingX", indodax: "Indodax", korbit: "Korbit", bitmex: "BitMEX", poloniex: "Poloniex", "osl-exchange": "OSL", nexo: "Nexo", weex: "WEEX", phemex: "Phemex", bitunix: "Bitunix", coindcx: "CoinDCX" };
+  const coinAmt = (x, a) => !isNum(x) ? "–" : (x < 0 ? "−" : x > 0 ? "+" : "") + fmtCoin(Math.abs(x)).replace(/(\d)K$/, "$1K") + " " + a;
+  const bigCoin = (x) => !isNum(x) ? "–" : Math.abs(x) >= 1e9 ? fmt(x / 1e9, 2) + "B" : fmtCoin(x);
+  function xbCard(a, S) {
+    const X = S && S.xb; if (!X) return "";
+    const tb = X.top.map((r) => `<tr><td style="text-align:left">${EX_NAME[r.ex] || r.ex}</td><td>${bigCoin(r.amt)}</td><td>${fmt(r.share, 1)}%</td><td class="${isNum(r.chg30) ? (r.chg30 >= 0 ? "neg" : "pos") : ""}">${isNum(r.chg30) ? (r.chg30 >= 0 ? "+" : "−") + bigCoin(Math.abs(r.chg30)) : "–"}</td></tr>`).join("");
+    const steps = X.steps30.length ? `Left out as wallet-list changes in the last 30 days: ${X.steps30.map((s) => `${EX_NAME[s.ex] || s.ex} ${s.t} (${sgn(s.pct, 0)})`).join(", ")}.` : "";
+    const rank = isNum(X.pct30_1y) ? (X.pct30_1y <= 15 ? "large outflow vs past year" : X.pct30_1y >= 85 ? "large inflow vs past year" : "normal range vs past year") : "";
+    return `
+      <div class="card" id="xb-card">
+        <div class="card-h"><h3>${a} on exchanges</h3><span class="last">${X.n_ex} exchanges with published wallets · DefiLlama · through ${X.t} UTC</span></div>
+        <div class="tiles">
+          <div class="tile"><div class="k">Held</div><div class="v">${bigCoin(X.total)} ${a}</div><div class="d">${fmtUsd(X.usd)} at the live price</div></div>
+          <div class="tile"><div class="k">Net flow · 7d</div><div class="v"><span class="${X.net7 <= 0 ? "up" : "down"}">${coinAmt(X.net7, "")}</span></div><div class="d">${fmtSignedUsd(X.net7_usd)} · 1d ${coinAmt(X.net1, "")}</div></div>
+          <div class="tile"><div class="k">Net flow · 30d</div><div class="v"><span class="${X.net30 <= 0 ? "up" : "down"}">${coinAmt(X.net30, "")}</span></div><div class="d">${sgn(X.net30_pct, 2)} of balance · ${rank}</div></div>
+        </div>
+        <div class="stack" style="margin-top:12px">
+          <div class="pane price" id="xb-bal" style="height:230px"><span class="tag">Balance, ${a} · solid = wallet-list changes removed · dashed = as reported</span></div>
+          <div class="pane low" id="xb-flow"><span class="tag">Daily net flow, ${a} · blue = into exchanges · red = out</span></div>
+        </div>
+        <div class="readout" id="xb-readout"></div>
+        <div class="tbl-wrap"><table><thead><tr><th style="text-align:left">Largest holders</th><th>${a}</th><th>Share</th><th>30d change</th></tr></thead><tbody>${tb}</tbody></table></div>
+        <div class="note">Outflows (coins leaving exchanges) usually mean withdrawals to self-custody, ETFs or treasuries: less supply sitting ready to sell. Inflows usually mean deposits to sell or to post as margin. Coverage: exchanges that publish their wallet lists, tracked by DefiLlama. <b>Coinbase, Kraken, Upbit and Bithumb are not included</b>, and ZEC / DASH are not tracked at all. A one-day move above 25% of one exchange's balance is treated as that exchange adding or dropping wallets on its list and left out of the flow. ${steps}</div>
+      </div>`;
+  }
+  function drawXb(a, J) {
+    const LC = window.LightweightCharts, X = J.xb; if (!LC || !X || !$("#xb-bal")) return [];
+    const ink2 = css("--ink-2"), grid = css("--grid"), rule = css("--rule"), panel = css("--panel"), T = X.t, n = T.length;
+    const mk = (el, extra = {}) => LC.createChart(el, Object.assign({ autoSize: true,
+      layout: { background: { type: "solid", color: panel }, textColor: ink2, fontFamily: "'IBM Plex Mono', ui-monospace, Menlo, monospace", fontSize: 11 },
+      grid: { vertLines: { visible: false }, horzLines: { color: grid } }, rightPriceScale: { borderColor: rule, minimumWidth: 78 },
+      timeScale: { borderColor: rule, rightOffset: 3, visible: false }, crosshair: { mode: 0 }, localization: { locale: "en-US", priceFormatter: (x) => bigCoin(x) } }, extra));
+    const pts = (arr) => T.map((t, i) => isNum(arr[i]) ? { time: t, value: arr[i] } : { time: t });
+    const nm = { priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false };
+    const c1 = mk($("#xb-bal"));
+    const sA = c1.addLineSeries({ color: css("--s1"), lineWidth: 2, priceLineVisible: false }); sA.setData(pts(X.adj));
+    c1.addLineSeries({ color: css("--ink-3"), lineWidth: 1, lineStyle: 2, ...nm }).setData(pts(X.total));
+    const c2 = mk($("#xb-flow"), { timeScale: { borderColor: rule, rightOffset: 3, visible: true } });
+    const sF = c2.addHistogramSeries({ ...nm }); sF.setData(T.map((t, i) => isNum(X.flow[i]) ? { time: t, value: X.flow[i], color: X.flow[i] >= 0 ? css("--inflow") : css("--outflow") } : { time: t }));
+    const all = [c1, c2], out = $("#xb-readout");
+    const show = (i) => { if (i < 0) return; out.innerHTML = `<span class="ro-d">${new Date(T[i] * 1000).toISOString().slice(0, 10)}</span> <b>${bigCoin(X.adj[i])} ${a}</b> <span>reported ${bigCoin(X.total[i])}</span> <span>flow ${coinAmt(X.flow[i], a)}</span>`; };
+    let sync = false;
+    for (const c of all) {
+      c.timeScale().subscribeVisibleLogicalRangeChange((r) => { if (!r || sync) return; sync = true; for (const o of all) if (o !== c) o.timeScale().setVisibleLogicalRange(r); sync = false; });
+      c.subscribeCrosshairMove((p) => { if (!p || !p.time) return show(n - 1); show(T.indexOf(p.time)); });
+    }
+    const from = Math.max(0, n - 180); for (const c of all) c.timeScale().setVisibleLogicalRange({ from: from - 0.5, to: n - 0.5 + 3 });
+    show(n - 1);
+    return all;
+  }
+
+  // ---------- XRP whale accumulation (math in mdh/dashboard/onchain.py whale_scores)
+  const scoreColor = (v) => { if (!isNum(v)) return css("--ink-3"); const t = Math.max(0, Math.min(1, v));
+    const A = [237, 161, 0], B = [214, 64, 69], C = [74, 58, 167]; const m = (x, y, k) => Math.round(x + (y - x) * k);
+    const [p, q, k] = t < 0.5 ? [A, B, t / 0.5] : [B, C, (t - 0.5) / 0.5]; return `rgb(${m(p[0], q[0], k)},${m(p[1], q[1], k)},${m(p[2], q[2], k)})`; };
+  function whaleCard(a, S) {
+    const W = S && S.whale; if (!W) return "";
+    const tile = (k, v, d) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="d">${d}</div></div>`;
+    const lvl = (v) => !isNum(v) ? "not enough history" : v >= 0.7 ? "strong accumulation" : v >= 0.55 ? "mild accumulation" : v > 0.45 ? "balanced" : v > 0.3 ? "mild distribution" : "distribution";
+    return `
+      <div class="card" id="whale-card">
+        <div class="card-h"><h3>XRP whale accumulation</h3><span class="last">XRPL · unlabeled wallets ≥ 1M XRP · through ${W.t} UTC</span></div>
+        <div class="tiles">
+          ${tile("Score · 30d", `<span style="color:${scoreColor(W.score30)}">${fmt(W.score30, 2)}</span>`, lvl(W.score30))}
+          ${tile("Score · 7d", `<span style="color:${scoreColor(W.score7)}">${fmt(W.score7, 2)}</span>`, lvl(W.score7))}
+          ${tile("Whales", fmt(W.whales, 0), `hold ${bigCoin(W.held)} XRP`)}
+          ${tile("Net change · 30d", `<span class="${signCls(W.net30)}">${coinAmt(W.net30, "")}</span>`, `existing whales · ${fmtSignedUsd(W.net30_usd)}`)}
+          ${tile("New whale wallets · 30d", bigCoin(W.new30) + " XRP", "wallets that held nothing a month ago")}
+        </div>
+        <div class="stack" style="margin-top:12px">
+          <div class="pane price" id="wh-px" style="height:230px"><span class="tag">XRP close · line colour = 30-day score (yellow 0 → red 0.5 → purple 1; grey = not enough history)</span></div>
+          <div class="pane low" id="wh-score"><span class="tag">Score · bars 30-day · line 7-day · dashed 0.5 = even</span></div>
+        </div>
+        <div class="readout" id="wh-readout"></div>
+        <div class="note"><b>Score</b>: among whales whose balance changed over the window, the share (weighted by what each held at the start) that added XRP. 1 = every active whale added, 0 = every one cut, 0.5 = even. Same idea as Glassnode's accumulation trend score, built from the XRPL itself. <b>Whales</b>: accounts XRPScan hasn't labeled (exchanges, Ripple, bridges, funds removed) whose ledger settings don't look like a custodial deposit account, with 1M+ XRP. Accounts with over 6,000 transactions since March are left out as likely services. <b>Limits</b>: before ${W.first === W.t ? "today" : "2026-09-29"} the history is rebuilt from today's rich list, so a whale that sold out before we started tracking is missing (it can make past accumulation look stronger); a whale moving coins to a fresh address shows up as "new whale wallets", not as buying. From 2026-09-29 on, every daily snapshot is kept, so this bias fades.</div>
+      </div>`;
+  }
+  function drawWhale(a, J) {
+    const LC = window.LightweightCharts, W = J.whale; if (!LC || !W || !$("#wh-px")) return [];
+    const ink2 = css("--ink-2"), grid = css("--grid"), rule = css("--rule"), panel = css("--panel"), T = W.t, n = T.length;
+    const mk = (el, extra = {}) => LC.createChart(el, Object.assign({ autoSize: true,
+      layout: { background: { type: "solid", color: panel }, textColor: ink2, fontFamily: "'IBM Plex Mono', ui-monospace, Menlo, monospace", fontSize: 11 },
+      grid: { vertLines: { visible: false }, horzLines: { color: grid } }, rightPriceScale: { borderColor: rule, minimumWidth: 78 },
+      timeScale: { borderColor: rule, rightOffset: 3, visible: false }, crosshair: { mode: 0 }, localization: { locale: "en-US" } }, extra));
+    const nm = { priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false };
+    const c1 = mk($("#wh-px"), { localization: { locale: "en-US", priceFormatter: (x) => "$" + fmt(x, 4) } });
+    const sP = c1.addLineSeries({ color: css("--ink-3"), lineWidth: 3, ...nm });   // each segment coloured by that day's score
+    sP.setData(T.map((t, i) => isNum(W.px[i]) ? { time: t, value: W.px[i], color: scoreColor(W.score30[i]) } : { time: t }));
+    const c2 = mk($("#wh-score"), { timeScale: { borderColor: rule, rightOffset: 3, visible: true } });
+    const sS = c2.addHistogramSeries({ ...nm, autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 1 } }) });
+    sS.setData(T.map((t, i) => isNum(W.score30[i]) ? { time: t, value: W.score30[i], color: scoreColor(W.score30[i]) } : { time: t }));
+    const s7 = c2.addLineSeries({ color: css("--ink"), lineWidth: 1.5, ...nm }); s7.setData(T.map((t, i) => isNum(W.score7[i]) ? { time: t, value: W.score7[i] } : { time: t }));
+    sS.createPriceLine({ price: 0.5, color: css("--ink-3"), lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: "" });
+    const all = [c1, c2], out = $("#wh-readout");
+    const show = (i) => { if (i < 0) return; out.innerHTML = `<span class="ro-d">${new Date(T[i] * 1000).toISOString().slice(0, 10)}</span> <b>score ${fmt(W.score30[i], 2)}</b> <span>7d ${fmt(W.score7[i], 2)}</span> <span>close ${isNum(W.px[i]) ? "$" + fmt(W.px[i], 4) : "–"}</span> <span>30d net ${coinAmt(W.net30[i], "XRP")}</span> <span>held ${bigCoin(W.held[i])}</span>`; };
+    let sync = false;
+    for (const c of all) {
+      c.timeScale().subscribeVisibleLogicalRangeChange((r) => { if (!r || sync) return; sync = true; for (const o of all) if (o !== c) o.timeScale().setVisibleLogicalRange(r); sync = false; });
+      c.subscribeCrosshairMove((p) => { if (!p || !p.time) return show(n - 1); show(T.indexOf(p.time)); });
+    }
+    for (const c of all) c.timeScale().fitContent();
+    show(n - 1);
+    return all;
+  }
+
+  // ---------- NEAR Intents vs issuance (math in mdh/dashboard/onchain.py near_intents)
+  function intentsCard(a, S) {
+    const I = S && S.intents; if (!I) return "";
+    const tile = (k, v, d) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="d">${d}</div></div>`;
+    const vchg = isNum(I.vol_prev30) && I.vol_prev30 > 0 ? (I.vol_30 / I.vol_prev30 - 1) * 100 : null;
+    return `
+      <div class="card" id="intents-card">
+        <div class="card-h"><h3>NEAR Intents vs inflation</h3><span class="last">DefiLlama (Intents) · NEAR RPC (supply) · through ${I.t} UTC</span></div>
+        <div class="tiles">
+          ${tile("Intents volume · 30d", fmtUsd(I.vol_30), `${isNum(vchg) ? sgn(vchg, 0) + " vs prior 30d · " : ""}${fmtUsd(I.vol_all)} all-time`)}
+          ${tile("Protocol revenue · 30d", fmtUsd(I.rev_30), `≈ ${fmtUsd(I.rev_annual)} a year · ${fmt(I.take_bp, 1)} bp of volume`)}
+          ${isNum(I.infl_90) || isNum(I.infl_365) ? tile("Supply growth", fmt(isNum(I.infl_90) ? I.infl_90 : I.infl_365, 2) + "% / yr", `measured over ${isNum(I.infl_90) ? "90 days" : "a year"} · cap 2.5%`) : ""}
+          ${isNum(I.issue_usd) ? tile("New NEAR per year", fmtUsd(I.issue_usd), `${fmtCoin(I.issue_coins)} NEAR at the live price`) : ""}
+          ${isNum(I.cover_pct) ? tile("Revenue ÷ issuance", `<span class="${I.cover_pct >= 100 ? "up" : "down"}">${fmt(I.cover_pct, 0)}%</span>`, `breaks even below ≈ ${fmtPx(I.breakeven_px)}`) : ""}
+          ${I.nrr ? tile("Bitwise NRR ETF", fmtCoin(I.nrr.coins) + " NEAR", `${fmtUsd(I.nrr.aum)} · ${I.nrr.t}` + (isNum(I.nrr.chg_coins) ? ` · ${coinAmt(I.nrr.chg_coins, "")} day` : " · flows start with the 2nd snapshot")) : ""}
+        </div>
+        <div class="stack" style="margin-top:12px">
+          <div class="pane price" id="in-vol" style="height:200px"><span class="tag">Intents daily volume (bars) · protocol revenue (line, right)</span></div>
+        </div>
+        <div class="readout" id="in-readout"></div>
+        <div class="note"><b>Revenue</b> is what the protocol keeps from Intents fees (DefiLlama's definition); the announced buyback would draw from it. <b>Supply growth</b> is measured from NEAR's own block headers (total supply, net of burnt fees), not assumed. <b>Revenue ÷ issuance</b> compares a year of revenue at the last 30 days' pace with a year of new NEAR at today's price: below 100%, a buyback of all revenue would not absorb new supply. The break-even price is where it would. Bitwise keeps 33% of NRR's staking rewards; the ETF's staking doesn't change total supply.</div>
+      </div>`;
+  }
+  function drawIntents(a, J) {
+    const LC = window.LightweightCharts, I = J.intents; if (!LC || !I || !$("#in-vol")) return [];
+    const ink2 = css("--ink-2"), grid = css("--grid"), rule = css("--rule"), panel = css("--panel"), T = I.t, n = T.length;
+    const c = LC.createChart($("#in-vol"), { autoSize: true,
+      layout: { background: { type: "solid", color: panel }, textColor: ink2, fontFamily: "'IBM Plex Mono', ui-monospace, Menlo, monospace", fontSize: 11 },
+      grid: { vertLines: { visible: false }, horzLines: { color: grid } }, leftPriceScale: { visible: true, borderColor: rule }, rightPriceScale: { borderColor: rule, minimumWidth: 78 },
+      timeScale: { borderColor: rule, rightOffset: 3 }, crosshair: { mode: 0 }, localization: { locale: "en-US", priceFormatter: (x) => fmtUsd(x) } });
+    const nm = { priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false };
+    const v = c.addHistogramSeries({ priceScaleId: "left", color: css("--s1"), ...nm }); v.setData(T.map((t, i) => isNum(I.vol[i]) ? { time: t, value: I.vol[i] } : { time: t }));
+    const r = c.addLineSeries({ color: css("--s2"), lineWidth: 1.5, ...nm }); r.setData(T.map((t, i) => isNum(I.rev[i]) ? { time: t, value: I.rev[i] } : { time: t }));
+    const out = $("#in-readout");
+    const show = (i) => { if (i < 0) return; out.innerHTML = `<span class="ro-d">${new Date(T[i] * 1000).toISOString().slice(0, 10)}</span> <b>volume ${fmtUsd(I.vol[i])}</b> <span>revenue ${fmtUsd(I.rev[i])}</span>`; };
+    c.subscribeCrosshairMove((p) => { if (!p || !p.time) return show(n - 1); show(T.indexOf(p.time)); });
+    const from = Math.max(0, n - 180); c.timeScale().setVisibleLogicalRange({ from: from - 0.5, to: n - 0.5 + 3 });
+    show(n - 1);
+    return [c];
+  }
+
+  const MORE_COINS = ["DASH", "ZEN", "LDO", "ENA", "AAVE", "SUI", "UNI", "NEAR", "DOGE", "HYPE"];
+  function renderCoin(a, view = a.toLowerCase()) {
+    state.coinTf = state.coinTf || "1d"; state.coinMa = state.coinMa || "sma"; state.coinScale = state.coinScale || "log";
+    // coin views share element ids: only the visible one keeps its content
+    for (const v of ["btc", "eth", "xrp", "sol", "zec", "more"]) if (v !== view) $("#view-" + v).innerHTML = "";
+    const host = $("#view-" + view);
+    for (const c of coinCharts) { try { c.remove(); } catch (e) {} } coinCharts = [];
+    host.innerHTML = (view === "more" ? `<div class="controls">${seg("moreCoin", MORE_COINS.map((c) => [c, c]), a)}</div>` : "") + coinShell(a);
+    loadCoin(a).then((J) => { if (state.view === view && $("#view-" + view).contains($("#cp-price"))) drawCoin(a, J); })
+      .catch((e) => { $("#coin-status").textContent = `Couldn't load ${a} data (${e.message}). Ask Claude to refresh the dashboard.`; });
+  }
+
+  function drawCoin(a, J) {
+    const LC = window.LightweightCharts; if (!LC) return;
+    const tf = state.coinTf, F = J.tf[tf]; if (!F || !F.t.length) { $("#coin-status").textContent = "No data for this timeframe."; return; }
+    const n = F.t.length, T = F.t, dec = pxDec(F.c);
+    const ink2 = css("--ink-2"), grid = css("--grid"), rule = css("--rule"), panel = css("--panel");
+    const up = css("--up"), down = css("--down");
+    const baseChart = (el, extra = {}) => LC.createChart(el, Object.assign({
+      autoSize: true,
+      layout: { background: { type: "solid", color: panel }, textColor: ink2, fontFamily: "'IBM Plex Mono', ui-monospace, Menlo, monospace", fontSize: 11 },
+      grid: { vertLines: { visible: false }, horzLines: { color: grid } },
+      rightPriceScale: { borderColor: rule, minimumWidth: 78 },
+      timeScale: { borderColor: rule, rightOffset: 3, timeVisible: tf === "4h", secondsVisible: false, visible: false },
+      crosshair: { mode: 0 },
+      handleScroll: true, handleScale: true,
+      localization: { locale: "en-US" },
+    }, extra));
+    const pts = (arr) => T.map((t, i) => isNum(arr[i]) ? { time: t, value: arr[i] } : { time: t });
+    const noMarks = { priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false };
+
+    // price pane
+    const cP = baseChart($("#cp-price"), { rightPriceScale: { borderColor: rule, minimumWidth: 78, mode: state.coinScale === "lin" ? 0 : 1 },
+      localization: { locale: "en-US", priceFormatter: (x) => "$" + fmt(x, dec) } });
+    const candles = cP.addCandlestickSeries({ upColor: up, downColor: down, wickUpColor: up, wickDownColor: down, borderVisible: false, priceLineVisible: false });
+    candles.setData(T.map((t, i) => isNum(F.c[i]) ? { time: t, open: F.o[i], high: F.h[i], low: F.l[i], close: F.c[i] } : { time: t }));
+    const vol = cP.addHistogramSeries({ priceScaleId: "vol", priceFormat: { type: "volume" }, ...noMarks });
+    cP.priceScale("vol").applyOptions({ scaleMargins: { top: 0.84, bottom: 0 }, visible: false });
+    const volUp = css("--ink-3");
+    vol.setData(T.map((t, i) => isNum(F.v[i]) ? { time: t, value: F.v[i], color: volUp } : { time: t }));
+    const maS = {};
+    for (const len of [20, 30, 50, 100]) {
+      const key = state.coinMa + len;
+      maS[len] = cP.addLineSeries({ color: css(MA_COLORS[len]), lineWidth: 1.5, ...noMarks });
+      maS[len].setData(pts(F[key]));
+    }
+
+    // MACD
+    const cM = baseChart($("#cp-macd"));
+    const hist = cM.addHistogramSeries({ ...noMarks, priceFormat: { type: "price", precision: dec + 1, minMove: Math.pow(10, -(dec + 1)) } });
+    hist.setData(T.map((t, i) => isNum(F.hist[i]) ? { time: t, value: F.hist[i], color: F.hist[i] >= 0 ? up : down } : { time: t }));
+    const mLine = cM.addLineSeries({ color: css("--s1"), lineWidth: 1.5, ...noMarks, priceFormat: { type: "price", precision: dec + 1, minMove: Math.pow(10, -(dec + 1)) } });
+    mLine.setData(pts(F.macd));
+    const sLine = cM.addLineSeries({ color: css("--s2"), lineWidth: 1.5, ...noMarks });
+    sLine.setData(pts(F.sig));
+
+    // RSI
+    const cR = baseChart($("#cp-rsi"));
+    const rs = cR.addLineSeries({ color: css("--s7"), lineWidth: 1.5, ...noMarks, autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }) });
+    rs.setData(pts(F.rsi));
+    for (const lvl of [30, 70]) rs.createPriceLine({ price: lvl, color: css("--ink-3"), lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "" });
+
+    // funding
+    const cF = baseChart($("#cp-fund"), { localization: { locale: "en-US", priceFormatter: (x) => fmt(x, 0) + "%" } });
+    const fs = cF.addHistogramSeries({ ...noMarks });
+    fs.setData(T.map((t, i) => isNum(F.fa[i]) ? { time: t, value: F.fa[i], color: F.fa[i] >= 0 ? css("--inflow") : css("--outflow") } : { time: t }));
+
+    // open interest (coins)
+    const cO = baseChart($("#cp-oi"), { localization: { locale: "en-US", priceFormatter: (x) => fmtCoin(x) } });
+    const oi = cO.addAreaSeries({ lineColor: css("--s1"), topColor: "transparent", bottomColor: "transparent", lineWidth: 1.5, ...noMarks });
+    oi.setData(pts(F.oi));
+
+    // CVD, re-anchored to the first visible candle
+    const cC = baseChart($("#cp-cvd"), { timeScale: { borderColor: rule, rightOffset: 3, timeVisible: tf === "4h", secondsVisible: false, visible: true },
+      localization: { locale: "en-US", priceFormatter: (x) => fmtSignedUsd(x), timeFormatter: undefined } });
+    const cvdS = cC.addLineSeries({ color: css("--s1"), lineWidth: 1.5, ...noMarks });
+    const cvdP = cC.addLineSeries({ color: css("--s2"), lineWidth: 1.5, ...noMarks });
+    let anchor = -1;
+    const cum = (arr, from) => { let acc = 0; return T.map((t, i) => { if (i < from) return { time: t }; if (isNum(arr[i])) acc += arr[i]; return { time: t, value: acc }; }); };
+    const setCvd = (from) => { from = Math.max(0, Math.min(n - 1, from)); if (from === anchor) return; anchor = from; cvdS.setData(cum(F.sd, from)); cvdP.setData(cum(F.pdl, from)); };
+
+    const all = [cP, cM, cR, cF, cO, cC];
+    // Fibonacci levels (all timeframes) + trend channel (1d / 4h only: its points are daily)
+    if (J.fib && (state.coinFib || "on") === "on") {
+      for (const l of J.fib.levels) candles.createPriceLine({ price: l.p, color: css(FIB_COLOR[l.r] || "--ink-3"), lineWidth: 1, lineStyle: l.r === 0 || l.r === 1 ? 0 : 2, axisLabelVisible: true, title: String(l.r) });
+      if (J.fib.ch && (tf === "1d" || tf === "4h")) {
+        const C = J.fib.ch, cc = css("--ink-3");
+        for (const [k, st] of [["mid", 2], ["up", 0], ["lo", 0]]) {
+          const ln = cP.addLineSeries({ color: cc, lineWidth: 1, lineStyle: st, ...noMarks });
+          ln.setData(C.t.map((t, i) => ({ time: t, value: C[k][i] })).filter((x) => isNum(x.value) && x.time >= T[0] && x.time <= T[n - 1]));
+        }
+      }
+    }
+    coinCharts = all.concat(drawRel(a, J), drawSig(a, J), drawXb(a, J), drawWhale(a, J), drawIntents(a, J));
+    const seriesOf = new Map([[cP, [candles, (i) => F.c[i]]], [cM, [mLine, (i) => F.macd[i]]], [cR, [rs, (i) => F.rsi[i]]],
+      [cF, [fs, (i) => F.fa[i]]], [cO, [oi, (i) => F.oi[i]]], [cC, [cvdS, (i) => cvdAt(F.sd, i)]]]);
+
+    // shared time axis: the logical range and crosshair follow whichever pane moved
+    let syncing = false;
+    for (const c of all) {
+      c.timeScale().subscribeVisibleLogicalRangeChange((r) => {
+        if (!r || syncing) return; syncing = true;
+        for (const o of all) if (o !== c) o.timeScale().setVisibleLogicalRange(r);
+        syncing = false;
+        setCvd(Math.ceil(r.from));
+      });
+      c.subscribeCrosshairMove((p) => {
+        if (syncing) return; syncing = true;
+        if (!p || !p.time) { for (const o of all) if (o !== c) o.clearCrosshairPosition(); showRow(n - 1, "Latest" + (F.partial_last ? " (forming)" : "")); }
+        else {
+          const i = T.indexOf(p.time);
+          for (const o of all) if (o !== c) { const [s, v] = seriesOf.get(o); const val = v(i); if (isNum(val)) o.setCrosshairPosition(val, p.time, s); else o.clearCrosshairPosition(); }
+          showRow(i, null);
+        }
+        syncing = false;
+      });
+    }
+
+    // readout line
+    const out = $("#coin-readout");
+    const when = (t) => { const d = new Date(t * 1000).toISOString(); return tf === "4h" ? d.slice(0, 16).replace("T", " ") + " UTC" : tf === "1M" ? d.slice(0, 7) : d.slice(0, 10); };
+    const cvdAt = (arr, i) => { if (i < anchor) return null; let s = 0; for (let j = anchor; j <= i; j++) if (isNum(arr[j])) s += arr[j]; return s; };
+    function showRow(i, label) {
+      if (i < 0) return;
+      const m = (len) => { const v = F[state.coinMa + len][i]; return `<span class="ro-m"><i style="background:var(${MA_COLORS[len]})"></i>${len} ${isNum(v) ? fmt(v, dec) : "–"}</span>`; };
+      out.innerHTML = `<span class="ro-d">${label ? label + " · " : ""}${when(T[i])}</span> O ${fmt(F.o[i], dec)} H ${fmt(F.h[i], dec)} L ${fmt(F.l[i], dec)} <b>C ${fmt(F.c[i], dec)}</b>` +
+        ` <span>Vol ${fmtUsd(F.v[i])}</span>` + [20, 30, 50, 100].map(m).join("") +
+        ` <span>MACD ${isNum(F.macd[i]) ? fmt(F.macd[i], dec + 1) : "–"} / ${isNum(F.sig[i]) ? fmt(F.sig[i], dec + 1) : "–"}</span>` +
+        ` <span>RSI ${isNum(F.rsi[i]) ? fmt(F.rsi[i], 1) : "–"}</span>` +
+        ` <span>Funding ${isNum(F.fb[i]) ? fmt(F.fb[i], 2) + "bp" : "–"} (${isNum(F.fa[i]) ? sgn(F.fa[i], 1) + "/yr" : "–"})</span>` +
+        ` <span>OI ${fmtCoin(F.oi[i])} · ${fmtUsd(F.oiu[i])}</span>` +
+        ` <span>CVD spot ${fmtSignedUsd(cvdAt(F.sd, i))} · perp ${fmtSignedUsd(cvdAt(F.pdl, i))}</span>`;
+    }
+
+    // initial window
+    const days = COIN_RANGE[tf];
+    let from = 0;
+    if (days) { const cut = T[n - 1] - days * 86400; while (from < n - 1 && T[from] < cut) from++; }
+    setCvd(from);
+    const r = { from: from - 0.5, to: n - 0.5 + 3 };
+    for (const c of all) c.timeScale().setVisibleLogicalRange(r);
+    showRow(n - 1, "Latest" + (F.partial_last ? " (forming)" : ""));
+    const firstOi = F.oi.findIndex(isNum), firstF = F.fa.findIndex(isNum);
+    const since = (i) => i < 0 ? "none yet" : "from " + when(T[i]).slice(0, 10);
+    $("#coin-status").textContent = `${n} candles from ${when(T[0])} · OI ${since(firstOi)} · funding ${since(firstF)}`;
+  }
+
+  // ================================================================ SINCE (every coin from one fixed moment)
+  const SINCE_COLORED = ["BTC", "ETH", "SOL", "XRP", "ZEC"];   // same entity colors as elsewhere (SERIES)
+  const HOLDING = "XRP";
+  const endLabels = {   // direct labels at the right end of each visible line, nudged apart
+    id: "endLabels",
+    afterDatasetsDraw(chart) {
+      const { ctx, chartArea } = chart; const items = [];
+      chart.data.datasets.forEach((ds, i) => {
+        const meta = chart.getDatasetMeta(i); if (meta.hidden || !ds.endLabel) return;
+        const pts = meta.data.filter((p) => p && !p.skip && isFinite(p.y)); const p = pts[pts.length - 1]; if (!p) return;
+        items.push({ y: p.y, x: p.x, text: ds.endLabel, color: ds.labelInk });
+      });
+      items.sort((a, b) => a.y - b.y);
+      for (let i = 1; i < items.length; i++) if (items[i].y - items[i - 1].y < 12) items[i].y = items[i - 1].y + 12;
+      ctx.save(); ctx.font = "500 10.5px 'IBM Plex Mono', ui-monospace, Menlo, monospace"; ctx.textBaseline = "middle";
+      for (const it of items) { ctx.fillStyle = it.color; ctx.fillText(it.text, Math.min(it.x + 6, chartArea.right + 6), it.y); }
+      ctx.restore();
+    },
+  };
+  function renderSince() {
+    const v = $("#view-since"), S = D.since;
+    if (!S || !S.coins || !Object.keys(S.coins).length) { v.innerHTML = `<div class="err"><h2>No data yet</h2><p class="sub">Ask Claude to refresh the dashboard.</p></div>`; return; }
+    const coins = Object.keys(S.coins);
+    const stat = coins.map((c) => {
+      const x = S.coins[c], p = x.pct.filter(isNum), last = lastVal(x.pct);
+      const hi = Math.max(...p), lo = Math.min(...p);
+      return { c, base: x.base, now: x.last, ret: last, best: hi, worst: lo, fromHigh: ((1 + last / 100) / (1 + hi / 100) - 1) * 100 };
+    }).sort((a, b) => b.ret - a.ret);
+    const btc = stat.find((s) => s.c === "BTC"), me = stat.find((s) => s.c === HOLDING);
+    const rank = stat.findIndex((s) => s.c === HOLDING) + 1;
+    const med = (() => { const r = stat.map((s) => s.ret).sort((a, b) => a - b), m = r.length >> 1; return r.length % 2 ? r[m] : (r[m - 1] + r[m]) / 2; })();
+    const baseUtc = S.base_utc.replace("T", " ").slice(0, 16), lastUtc = (S.last_utc || "").replace("T", " ").slice(0, 16);
+    const hours = Math.round((Date.parse(S.last_utc + "Z") - Date.parse(S.base_utc + "Z")) / 36e5);
+    const t = (k, val, d) => `<div class="tile"><div class="k">${k}</div><div class="v">${val}</div><div class="d">${d}</div></div>`;
+    const pctSpan = (x, d = 1) => `<span class="${signCls(x)}">${sgn(x, d)}</span>`;
+    state.sinceOn = state.sinceOn || {};
+    const on = (c) => state.sinceOn[c] !== false;
+    v.innerHTML = `
+      <div><span class="eyebrow">From ${S.label} (${baseUtc} UTC) to ${lastUtc} UTC · ${hours} hours · Binance spot</span>
+        <h2>${HOLDING} ${sgn(me && me.ret, 1)}: #${rank} of ${stat.length}, ${sgn(me && btc ? me.ret - btc.ret : null, 1, " pts")} vs BTC</h2>
+        <p class="sub">Every coin measured from the same moment: the open of the ${baseUtc} UTC hourly candle to the latest hourly close.</p></div>
+      <div class="tiles">
+        ${me ? t(`${HOLDING} · your entry`, pctSpan(me.ret), `${fmtPx(me.base)} → ${fmtPx(me.now)} · #${rank} of ${stat.length}`) : ""}
+        ${btc ? t("BTC", pctSpan(btc.ret), `${fmtPx(btc.base)} → ${fmtPx(btc.now)}`) : ""}
+        ${t("Best", pctSpan(stat[0].ret), `${stat[0].c} · ${fmtPx(stat[0].base)} → ${fmtPx(stat[0].now)}`)}
+        ${t("Worst", pctSpan(stat[stat.length - 1].ret), `${stat[stat.length - 1].c} · ${fmtPx(stat[stat.length - 1].base)} → ${fmtPx(stat[stat.length - 1].now)}`)}
+        ${t(`Median of ${stat.length}`, pctSpan(med), `${stat.filter((s) => s.ret > 0).length} up · ${stat.filter((s) => s.ret <= 0).length} down`)}
+      </div>
+      <div class="grid two">
+        <div class="card"><div class="card-h"><h3>Return since ${S.label}</h3><span class="last">ranked · ${HOLDING} marked ▸</span></div>
+          <div class="chart" style="height:${Math.max(300, stat.length * 26)}px"><canvas id="si-bar" role="img" aria-label="Return since start, ranked"></canvas></div></div>
+        <div class="card"><div class="card-h"><h3>Path since ${S.label}</h3><span class="last">% change from the start, hourly · hover for all</span></div>
+          <div class="legend toggles" id="si-chips" role="group" aria-label="Coins">${stat.map((s) => {
+            const col = SINCE_COLORED.includes(s.c) ? `var(${SERIES[s.c]})` : "var(--ink-3)";
+            return `<button class="tgl" data-since="${s.c}" aria-pressed="${on(s.c)}"><i style="background:${col}"></i>${s.c}</button>`; }).join("")}</div>
+          <div class="chart" style="height:${Math.max(300, stat.length * 26) - 40}px"><canvas id="si-line" role="img" aria-label="Percent change since start, hourly"></canvas></div></div>
+      </div>
+      <div class="card"><div class="card-h"><h3>Table</h3><span class="last">best / worst = highest and lowest point since the start (hourly closes)</span></div>
+        <div class="tbl-wrap"><table><thead><tr><th>#</th><th style="text-align:left">Coin</th><th>At start</th><th>Now</th><th>Since start</th><th>vs BTC</th><th>Best</th><th>Worst</th><th>From its high</th></tr></thead><tbody>
+        ${stat.map((s, i) => `<tr${s.c === HOLDING ? ' style="font-weight:650"' : ""}><td>${i + 1}</td><td style="text-align:left">${s.c === HOLDING ? "▸ " : ""}${s.c}</td><td>${fmtPx(s.base)}</td><td>${fmtPx(s.now)}</td>
+          <td class="${s.ret > 0 ? "pos" : s.ret < 0 ? "neg" : "zero"}">${sgn(s.ret, 1)}</td><td>${btc ? sgn(s.ret - btc.ret, 1, " pts") : "–"}</td>
+          <td>${sgn(s.best, 1)}</td><td>${sgn(s.worst, 1)}</td><td>${sgn(s.fromHigh, 1)}</td></tr>`).join("")}</tbody></table></div>
+        <div class="note">"vs BTC" is the coin's return minus BTC's, in percentage points. "From its high" is how far the coin sits below its best level since the start.</div></div>`;
+
+    // ranked bars: polarity colors, value labels at the bar end
+    const upC = css("--up"), dnC = css("--down"), ink = css("--ink"), ink2 = css("--ink-2");
+    const ob = baseOpts();
+    ob.indexAxis = "y"; ob.interaction = { mode: "nearest", axis: "y", intersect: false };
+    ob.scales.x.ticks.callback = (x) => sgn(x, 0); ob.scales.x.grid = { color: css("--grid") };
+    ob.scales.y.grid = { display: false };
+    ob.scales.y.ticks.font = { family: "'IBM Plex Mono', ui-monospace, Menlo, monospace", size: 11 };
+    ob.scales.y.ticks.color = (c) => stat[c.index] && stat[c.index].c === HOLDING ? ink : ink2;
+    ob.scales.y.ticks.maxTicksLimit = 40; ob.scales.y.ticks.autoSkip = false;
+    ob.layout = { padding: { right: 48 } };
+    ob.plugins.tooltip.callbacks = { label: (ctx) => { const s = stat[ctx.dataIndex]; return ` ${sgn(s.ret, 2)} · ${fmtPx(s.base)} → ${fmtPx(s.now)}`; } };
+    const barLabels = { id: "barLabels", afterDatasetsDraw(chart) {
+      const { ctx } = chart, meta = chart.getDatasetMeta(0);
+      ctx.save(); ctx.font = "500 10.5px 'IBM Plex Mono', ui-monospace, Menlo, monospace"; ctx.textBaseline = "middle"; ctx.fillStyle = ink2;
+      meta.data.forEach((b, i) => { const val = stat[i].ret; ctx.textAlign = val >= 0 ? "left" : "right"; ctx.fillText(sgn(val, 1), b.x + (val >= 0 ? 5 : -5), b.y); });
+      ctx.restore(); } };
+    draw("si-bar", { type: "bar", plugins: [barLabels], options: ob, data: { labels: stat.map((s) => (s.c === HOLDING ? "▸ " : "") + s.c),
+      datasets: [{ data: stat.map((s) => s.ret), backgroundColor: stat.map((s) => s.ret >= 0 ? upC : dnC), borderRadius: 4, borderSkipped: "start", barPercentage: 0.8, categoryPercentage: 0.9 }] } });
+
+    // paths: one shared axis (% from the start); five colored entities, the rest muted
+    const T = S.coins[stat[0].c].t, labels = T.map((x) => new Date(x * 1000).toISOString().slice(5, 13).replace("T", " ") + "h");
+    const muted = css("--ink-3");
+    const ds = stat.map((s) => { const colored = SINCE_COLORED.includes(s.c); const col = colored ? css(SERIES[s.c]) : muted;
+      const byT = new Map(S.coins[s.c].t.map((x, i) => [x, S.coins[s.c].pct[i]]));
+      return { label: s.c, data: T.map((x) => byT.has(x) ? byT.get(x) : null), borderColor: col, backgroundColor: col,
+        borderWidth: s.c === HOLDING ? 2.5 : colored ? 2 : 1.25, hidden: !on(s.c), order: colored ? 0 : 1,
+        endLabel: `${s.c} ${sgn(s.ret, 0)}`, labelInk: colored ? ink : ink2 }; });
+    const ol = baseOpts(); ol.layout = { padding: { right: 70 } };
+    ol.scales.y.ticks.callback = (x) => sgn(x, 0);
+    ol.plugins.tooltip.itemSort = (a, b) => b.parsed.y - a.parsed.y;
+    ol.plugins.tooltip.callbacks = { label: (ctx) => ` ${ctx.dataset.label}: ${sgn(ctx.parsed.y, 1)}` };
+    draw("si-line", { type: "line", plugins: [endLabels], options: ol, data: { labels, datasets: ds.map((d) => Object.assign({ pointRadius: 0, pointHoverRadius: 3, tension: 0, spanGaps: true, fill: false }, d)) } });
+    $("#si-chips").onclick = (ev) => {
+      const b = ev.target.closest("button[data-since]"); if (!b) return;
+      const c = b.dataset.since; state.sinceOn[c] = !on(c); save(); b.setAttribute("aria-pressed", String(on(c)));
+      const ch = charts["si-line"]; const d = ch && ch.data.datasets.find((x) => x.label === c); if (d) { d.hidden = !on(c); ch.update("none"); }
+    };
+  }
+
+  // ================================================================ ETF DAILY REPORT (zh / en), also the daily image (?print)
+  const PRINT = /[?&]print\b/.test(location.search);
+  const ER_T = {
+    zh: { title: (a) => `${a} 现货 ETF 日报`, sub: "美国现货 ETF · 持仓数量观察", ny: "纽约时间", hold: "总持仓", day: "当日净变动", d7: "最近七个交易日", mtd: "本月以来",
+      ytd: "年初以来", launch: "上市以来累计", cur: "当前持仓", single: "单日变化", prev7: "上 7 个交易日合计", aum: "资产规模", px: "收盘价（纽约 16:00）",
+      trend: (n) => `近 ${n} 个交易日总持仓走势`, bars: (n) => `近 ${n} 个交易日净变化`, focus: "今日变化焦点", upL: "增持靠前", dnL: "减持靠前",
+      perEtf: (u) => `当日各 ETF 变化（${u}）`, rank: "最新持仓排行", flowStats: "流向统计", nIn: "净增持产品数", nOut: "净减持产品数", nFlat: "零变动产品数",
+      topIn: "最大增持", topOut: "最大减持", sumIn: "增持合计", sumOut: "减持合计", fund: "基金", holdCol: (u) => `持仓量（${u}）`, share: "占比", others: "其他",
+      ranked: "排名", unit: "只", summary: "今日解读", vsPrev: "较上一交易日", streak: (n, up) => `连续 ${n} 日净${up ? "增持" : "减持"}`,
+      noFunds: "该资产暂无分基金数据（SoSoValue 未提供），分基金面板从每日快照开始累积。", window: "窗口", coinsNote: "持仓以枚计；纵轴按区间展示", perNote: "按同一绝对尺度绘制；小额变化见右侧数值",
+      method: (r) => `口径：按交易日记账（与 Farside / SoSoValue 相同），枚数 = 美元净流入 ÷ 当日纽约 16:00 价格；持仓以最新交易日为锚（${r.anchor_src === "SoSoValue token holdings" ? "SoSoValue 公布的持币量" : "资产规模 ÷ 价格"}）逐日回推。七日比例 = 七日净变化 ÷ 窗口开始前总持仓。部分发行商的持仓 T+1 披露，按持仓差计算的口径会把部分流量记到下一个交易日。数据来源：${r.source}${r.fund_date ? `；分基金数据日期 ${r.fund_date}` : ""}。不构成投资建议。` },
+    en: { title: (a) => `${a} Spot ETF Daily`, sub: "US spot ETFs · holdings in coins", ny: "New York", hold: "Holdings", day: "Net change today", d7: "Last 7 sessions", mtd: "Month to date",
+      ytd: "Year to date", launch: "Since launch", cur: "current", single: "one session", prev7: "Previous 7 sessions", aum: "Assets", px: "Price (4 PM New York)",
+      trend: (n) => `Holdings, last ${n} sessions`, bars: (n) => `Net change, last ${n} sessions`, focus: "Today's movers", upL: "Biggest adds", dnL: "Biggest cuts",
+      perEtf: (u) => `Change by ETF (${u})`, rank: "Holdings ranking", flowStats: "Flow stats", nIn: "Funds adding", nOut: "Funds cutting", nFlat: "No change",
+      topIn: "Largest add", topOut: "Largest cut", sumIn: "Total added", sumOut: "Total cut", fund: "Fund", holdCol: (u) => `Holdings (${u})`, share: "Share", others: "Others",
+      ranked: "#", unit: "", summary: "Today's read", vsPrev: "vs previous session", streak: (n, up) => `${n} ${up ? "inflow" : "outflow"} sessions in a row`,
+      noFunds: "No per-fund data for this asset yet (SoSoValue doesn't provide it); the per-fund panels build up from daily snapshots.", window: "Window", coinsNote: "Holdings in coins; axis zoomed to the range", perNote: "Same scale for every fund; small moves shown as numbers",
+      method: (r) => `Method: flows by trade date (as Farside / SoSoValue), coins = USD net flow ÷ the 4 PM New York price that day; holdings anchored on the latest session (${r.anchor_src === "SoSoValue token holdings" ? "SoSoValue's reported coin holdings" : "net assets ÷ price"}) and walked back day by day. 7-day % = 7-day change ÷ holdings before the window. Some issuers report holdings a day late, so tallies built from holdings differences put part of a day's flow on the next session. Source: ${r.source}${r.fund_date ? `; per-fund data as of ${r.fund_date}` : ""}. Not investment advice.` },
+  };
+  function renderEtfReport() {
+    const v = $("#view-etfreport"), R = D.etf_report || {};
+    const assets = Object.keys(R).filter((a) => R[a] && !R[a].error);
+    if (!assets.length) { v.innerHTML = `<div class="err"><h2>No ETF report data</h2></div>`; return; }
+    if (!assets.includes(state.erAsset)) state.erAsset = assets.includes("ETH") ? "ETH" : assets[0];
+    state.erLang = state.erLang || "zh"; state.erWin = state.erWin || 7;
+    const r = R[state.erAsset], a = r.asset, L = ER_T[state.erLang], zh = state.erLang === "zh";
+    const nd = (a === "BTC" || a === "ZEC") ? 2 : 0;
+    const num = (x, d = nd) => !isNum(x) ? "–" : x.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+    const sn = (x, d = nd) => !isNum(x) ? "–" : (x > 0 ? "+" : x < 0 ? "−" : "") + num(Math.abs(x), d);
+    const usdM = (x) => !isNum(x) ? "–" : (x < 0 ? "−$" : "+$") + (Math.abs(x) >= 1e9 ? fmt(Math.abs(x) / 1e9, 2) + "B" : fmt(Math.abs(x) / 1e6, 1) + "M");
+    const W = r.win, n = Math.min(state.erWin, r.series.date.length);
+    const S = { date: r.series.date.slice(-n), coins: r.series.coins.slice(-n), hold: r.series.hold.slice(-n), usd: r.series.usd.slice(-n) };
+    const pctPill = (p) => isNum(p) ? `<span class="er-pill ${p >= 0 ? "up" : "down"}">${sgn(p, 2)}</span>` : "";
+    const kpi = (k, val, sub, pill, cls = "") => `<div class="er-kpi ${cls}"><div class="k">${k}</div><div class="v ${cls ? "" : signCls(val)}">${cls ? num(val) : sn(val)}</div><div class="d">${pill || ""}<span>${sub}</span></div></div>`;
+    const fundsHave = r.funds && r.funds.length;
+    const funds = fundsHave ? r.funds : [];
+    const byChange = funds.slice().sort((x, y) => (y.coins || 0) - (x.coins || 0));
+    const top = funds.slice(0, 6), rest = funds.slice(6);
+    const restHold = rest.reduce((s, x) => s + (x.hold || 0), 0), restShare = rest.reduce((s, x) => s + (x.share || 0), 0);
+    const nm = (f) => zh ? f.zh : f.en;
+    const ups = byChange.filter((f) => f.coins > 0).slice(0, 5), dns = byChange.filter((f) => f.coins < 0).reverse().slice(0, 5);
+    const st = r.stats;
+    v.innerHTML = `
+      <div class="controls er-controls">
+        ${seg("erAsset", assets.map((x) => [x, x]), state.erAsset)}
+        ${seg("erWin", [[7, zh ? "7 日" : "7d"], [30, zh ? "30 日" : "30d"], [90, zh ? "90 日" : "90d"]], state.erWin)}
+        ${seg("erLang", [["zh", "中文"], ["en", "EN"]], state.erLang)}
+        <button class="tgl" id="er-print">${zh ? "生成日报图片" : "Daily image"}</button>
+      </div>
+      <div class="er" id="er-sheet">
+        <div class="er-head">
+          <div><div class="er-eyebrow">MARKET DATA HUB / SPOT ETF DAILY</div>
+            <h2 class="er-title">${L.title(a)}</h2>
+            <div class="er-sub">${L.sub} · <b>${r.date}</b> ${L.ny}</div></div>
+          <div class="er-meta"><div>${L.px}: <b>${fmtPx(r.px)}</b></div><div>${L.aum}: <b>${isNum(r.aum_usd) ? "$" + fmt(r.aum_usd / 1e9, 2) + "B" : "–"}</b></div>
+            ${r.streak >= 2 ? `<div>${L.streak(r.streak, r.streak_dir > 0)}</div>` : ""}</div>
+        </div>
+        <div class="er-kpis">
+          ${kpi(L.hold, r.hold, `${L.cur} · ${a}`, `<span class="er-sub2">$${fmt(r.hold_usd / 1e9, 2)}B</span>`, "dark")}
+          ${kpi(L.day, W.day.coins, `${usdM(W.day.usd)} · ${a}`, isNum(r.day_vs_prev_pct) && Math.sign(W.prev_day.coins) === Math.sign(W.day.coins) ? `<span class="er-pill">${sgn(r.day_vs_prev_pct, 0)} ${L.vsPrev}</span>` : "")}
+          ${kpi(L.d7, W.d7.coins, `${usdM(W.d7.usd)} · ${a}`, pctPill(W.d7.pct))}
+          ${kpi(L.mtd, W.mtd.coins, `${usdM(W.mtd.usd)} · ${a}`, pctPill(W.mtd.pct))}
+          ${kpi(L.ytd, W.ytd.coins, `${usdM(W.ytd.usd)} · ${a}`, pctPill(W.ytd.pct))}
+          ${kpi(L.launch, W.launch.coins, `${usdM(W.launch.usd)} · ${a}`, pctPill(W.launch.pct))}
+        </div>
+        <div class="er-strip">
+          <div><b>${L.prev7}</b><span>${(W.prev7.from || "").slice(5).replace("-", "/")}–${(W.prev7.to || "").slice(5).replace("-", "/")}</span><em class="${signCls(W.prev7.coins)}">${sn(W.prev7.coins)} ${a}</em></div>
+          <div><b>${zh ? "七日累计较前一日" : "7-day total vs yesterday"}</b><span>${zh ? "移出窗口" : "left the window"}: ${(r.window_effect.dropped_date || "").slice(5).replace("-", "/")} ${sn(r.window_effect.dropped_coins)}</span><em class="${signCls(r.window_effect.change)}">${sn(r.window_effect.change)} ${a}</em></div>
+          <div><b>${zh ? "近 30 日日均" : "30-session average"}</b><span>${r.issuance_days != null ? (zh ? `当日 ≈ ${r.issuance_days} 天矿工产出` : `today ≈ ${r.issuance_days} days of mining`) : ""}</span><em class="${signCls(r.avg30)}">${sn(r.avg30)} ${a}</em></div>
+        </div>
+        <div class="card er-text"><div class="card-h"><h3>${L.summary}</h3></div><p>${r.text[state.erLang]}</p></div>
+        <div class="er-grid3">
+          <div class="card"><div class="card-h"><h3>${L.trend(n)}</h3><span class="last">${a}</span></div><div class="chart" style="height:260px"><canvas id="er-hold"></canvas></div><div class="note">${L.coinsNote}</div></div>
+          <div class="card"><div class="card-h"><h3>${L.bars(n)}</h3><span class="last">${a}</span></div><div class="chart" style="height:260px"><canvas id="er-bars"></canvas></div><div class="note">${zh ? "按交易日记账；正为增持，负为减持" : "By trade date; positive = added"}</div></div>
+          <div class="card"><div class="card-h"><h3>${L.focus}</h3><span class="last">${a}</span></div>
+            ${fundsHave ? `<div class="er-focus"><div class="up"><h4>${L.upL}</h4>${ups.length ? ups.map((f, i) => `<div class="row"><i>${i + 1}</i><span>${nm(f)} <small>${f.ticker}</small></span><b>${sn(f.coins)}</b></div>`).join("") : "<p>–</p>"}</div>
+              <div class="dn"><h4>${L.dnL}</h4>${dns.length ? dns.map((f, i) => `<div class="row"><i>${i + 1}</i><span>${nm(f)} <small>${f.ticker}</small></span><b>${sn(f.coins)}</b></div>`).join("") : "<p>–</p>"}</div></div>` : `<p class="note">${L.noFunds}</p>`}
+          </div>
+        </div>
+        ${fundsHave ? `<div class="er-grid3">
+          <div class="card"><div class="card-h"><h3>${L.perEtf(a)}</h3><span class="last">${r.fund_date}</span></div>
+            <div class="er-bars">${byChange.map((f) => { const mx = Math.max(...funds.map((x) => Math.abs(x.coins || 0)), 1e-9); const w = Math.abs(f.coins || 0) / mx * 50;
+              return `<div class="row"><span>${nm(f)} <small>${f.ticker}</small></span><div class="track"><i class="${f.coins >= 0 ? "pos" : "neg"}" style="${f.coins >= 0 ? "left:50%" : `left:${50 - w}%`};width:${w}%"></i></div><b class="${signCls(f.coins)}">${f.coins ? sn(f.coins) : num(0)}</b></div>`; }).join("")}</div>
+            <div class="note">${L.perNote}</div></div>
+          <div class="card"><div class="card-h"><h3>${L.rank}</h3><span class="last">${a}</span></div>
+            <div class="tbl-wrap"><table class="er-rank"><thead><tr><th>${L.ranked}</th><th style="text-align:left">${L.fund}</th><th>${L.holdCol(a)}</th><th>${L.share}</th></tr></thead><tbody>
+            ${top.map((f, i) => `<tr><td>${i + 1}</td><td style="text-align:left">${nm(f)} <small>${f.ticker}</small></td><td>${num(f.hold)}</td><td><div class="er-share"><i style="width:${Math.min(100, f.share || 0)}%"></i></div>${fmt(f.share, 2)}%</td></tr>`).join("")}
+            ${rest.length ? `<tr><td>–</td><td style="text-align:left">${L.others} <small>${rest.length}</small></td><td>${num(restHold)}</td><td><div class="er-share"><i style="width:${Math.min(100, restShare)}%"></i></div>${fmt(restShare, 2)}%</td></tr>` : ""}
+            </tbody></table></div></div>
+          <div class="card"><div class="card-h"><h3>${L.flowStats}</h3><span class="last">${funds.length} ETF</span></div>
+            <div class="er-counts"><div class="up"><span>${L.nIn}</span><b>${st.n_in}</b></div><div class="dn"><span>${L.nOut}</span><b>${st.n_out}</b></div><div><span>${L.nFlat}</span><b>${st.n_flat}</b></div></div>
+            <div class="er-big"><div class="up"><span>${L.topIn}</span><b>${st.top_in ? nm(st.top_in) : "–"}</b><em>${st.top_in ? sn(st.top_in.coins) + " " + a : ""}</em></div>
+              <div class="dn"><span>${L.topOut}</span><b>${st.top_out ? nm(st.top_out) : "–"}</b><em>${st.top_out ? sn(st.top_out.coins) + " " + a : ""}</em></div></div>
+            <div class="er-sums"><div><span>${L.sumIn}</span><b class="up">${sn(st.sum_in)} ${a}</b></div><div><span>${L.sumOut}</span><b class="down">${sn(st.sum_out)} ${a}</b></div></div></div>
+        </div>` : ""}
+        <div class="note er-method">${L.method(r)}</div>
+      </div>`;
+    // charts
+    const labels = S.date.map((d) => d.slice(5));
+    const lblPlugin = (fmtF, every) => ({ id: "erLbl", afterDatasetsDraw(chart) {
+      if (n > 10) return; const { ctx } = chart, meta = chart.getDatasetMeta(0);
+      ctx.save(); ctx.font = "600 10.5px 'IBM Plex Mono', ui-monospace, Menlo, monospace"; ctx.fillStyle = css("--ink-2"); ctx.textAlign = "center";
+      meta.data.forEach((p, i) => { const val = chart.data.datasets[0].data[i]; if (!isNum(val)) return; ctx.textBaseline = val >= 0 || chart.config.type === "line" ? "bottom" : "top";
+        ctx.fillText(fmtF(val), p.x, p.y + (ctx.textBaseline === "bottom" ? -6 : 6)); });
+      ctx.restore(); } });
+    const oh = baseOpts(); oh.scales.y.ticks.callback = (x) => num(x, 0); oh.layout = { padding: { top: 24, left: 6, right: 40 } }; oh.scales.y.grace = "8%";
+    oh.plugins.tooltip.callbacks = { label: (c) => ` ${num(c.parsed.y)} ${a}` };
+    draw("er-hold", { type: "line", plugins: [lblPlugin((x) => num(x, 0))], options: oh, data: { labels, datasets: [{ data: S.hold, borderColor: css("--s1"), backgroundColor: css("--s1"), borderWidth: 2, pointRadius: n <= 30 ? 3 : 0, tension: 0 }] } });
+    const ob = baseOpts(); ob.scales.y.ticks.callback = (x) => num(x, 0); ob.layout = { padding: { top: 18 } };
+    ob.plugins.tooltip.callbacks = { label: (c) => ` ${sn(c.parsed.y)} ${a} · ${usdM(S.usd[c.dataIndex])}` };
+    draw("er-bars", { type: "bar", plugins: [lblPlugin((x) => sn(x, 0))], options: ob, data: { labels, datasets: [{ data: S.coins, backgroundColor: S.coins.map((x) => x >= 0 ? css("--up") : css("--down")), borderRadius: 4, borderSkipped: "start", maxBarThickness: 40 }] } });
+    $("#er-print").onclick = () => { const u = new URL(location.href); u.searchParams.set("print", "1"); u.hash = "etfreport"; window.open(u.toString(), "_blank"); };
+  }
+
   // ================================================================ shell
-  const renderers = { overview: renderOverview, etf: renderEtf, market: renderMarket, deriv: renderDeriv };
+  const renderers = { overview: renderOverview, etf: renderEtf, market: renderMarket, deriv: renderDeriv, since: renderSince, etfreport: renderEtfReport };
+  for (const a of ["BTC", "ETH", "XRP", "SOL", "ZEC"]) renderers[a.toLowerCase()] = () => renderCoin(a);
+  renderers.more = () => renderCoin(MORE_COINS.includes(state.moreCoin) ? state.moreCoin : MORE_COINS[0], "more");
   function show(view) {
     state.view = view; save();
     for (const b of document.querySelectorAll("nav.tabs button")) b.setAttribute("aria-selected", String(b.dataset.view === view));
@@ -686,7 +1731,7 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
     const tab = ev.target.closest("nav.tabs button"); if (tab) { history.replaceState(null, "", "#" + tab.dataset.view); show(tab.dataset.view); return; }
     const b = ev.target.closest("button[data-seg]"); if (!b) return;
     const k = b.dataset.seg; const raw = b.dataset.v;
-    state[k] = (k === "etfRange" || k === "mktRange") ? Number(raw) : raw; save(); renderers[state.view]();
+    state[k] = (k === "etfRange" || k === "mktRange" || k === "erWin") ? Number(raw) : raw; save(); renderers[state.view]();
   });
   const mq = matchMedia("(prefers-color-scheme: dark)");
   const rerender = () => D && renderers[state.view]();
@@ -696,8 +1741,10 @@ footer { margin-top: 28px; border-top: 1px solid var(--rule); padding-top: 14px;
   function footer() {
     $("#footer").innerHTML = `<span class="eyebrow">Data freshness · last successful run per source (UTC)</span>
       <div class="fresh">${D.freshness.map((f) => `<span class="pill" title="${f.status}">${f.source} ${f.last_run.slice(5)}${f.status === "ok" ? "" : " · " + f.status}</span>`).join("")}</div>
-      <div class="note">Snapshot of the local market-data-hub database. Sources: Binance, SoSoValue, Farside, TradingView, DefiLlama, FRED, Cboe, Nasdaq, Coin Metrics, alternative.me, Deribit, CoinGecko. Candlestick chart by <a href="https://www.tradingview.com/lightweight-charts/" target="_blank" rel="noopener">TradingView Lightweight Charts</a>. Not investment advice.</div>`;
+      <div class="note">Snapshot of the local market-data-hub database. Sources: Binance, SoSoValue, Farside, TradingView, DefiLlama, FRED, Cboe, Nasdaq, Coin Metrics, alternative.me, Deribit, CoinGecko, Coinbase, OKX, Bybit, Hyperliquid, CFTC. Candlestick chart by <a href="https://www.tradingview.com/lightweight-charts/" target="_blank" rel="noopener">TradingView Lightweight Charts</a>. Not investment advice.</div>`;
   }
+  if (PRINT) { document.body.classList.add("print"); document.documentElement.setAttribute("data-theme", "light");
+    const q = new URLSearchParams(location.search); if (q.get("asset")) state.erAsset = q.get("asset"); if (q.get("lang")) state.erLang = q.get("lang"); state.erWin = 7; }
   const fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
   fontsReady.then(() => fetch("data.json", { cache: "no-store" })).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then((d) => {
     D = d;

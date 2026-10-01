@@ -103,3 +103,140 @@ LEFT JOIN etf USING (date)
 LEFT JOIN vix_daily vx USING (date)
 WHERE cal.date <= current_date
 ORDER BY cal.date
+;;
+
+-- Coinbase premium: Coinbase BTC-USD vs Binance BTC-USDT converted to USD with Coinbase USDT-USD.
+-- Positive = US buyers paying up. Hourly (from binance_1h) and daily (from Binance daily klines).
+CREATE OR REPLACE VIEW v_coinbase_premium_1h AS
+WITH cb AS (SELECT symbol, ts, close FROM cex_spot WHERE venue = 'coinbase' AND interval = '1h' AND symbol <> 'USDT'),
+     u  AS (SELECT ts, close AS usdt_usd FROM cex_spot WHERE venue = 'coinbase' AND interval = '1h' AND symbol = 'USDT'),
+     bn AS (SELECT replace(symbol, 'USDT', '') AS symbol, "timestamp" AS ts, spot_close FROM binance_1h)
+SELECT cb.symbol, cb.ts, cb.close AS coinbase_usd, bn.spot_close AS binance_usdt, u.usdt_usd,
+       (cb.close / (bn.spot_close * coalesce(u.usdt_usd, 1)) - 1) * 1e4 AS premium_bp
+FROM cb JOIN bn USING (symbol, ts) LEFT JOIN u USING (ts)
+-- completed hours only: the current candle's close depends on when each exchange was polled
+WHERE cb.ts < date_trunc('hour', now()::TIMESTAMP) - INTERVAL 1 HOUR
+ORDER BY cb.symbol, cb.ts
+;;
+
+CREATE OR REPLACE VIEW v_coinbase_premium_1d AS
+WITH cb AS (SELECT symbol, CAST(ts AS DATE) AS date, close FROM cex_spot WHERE venue = 'coinbase' AND interval = '1d' AND symbol <> 'USDT'),
+     u  AS (SELECT CAST(ts AS DATE) AS date, close AS usdt_usd FROM cex_spot WHERE venue = 'coinbase' AND interval = '1d' AND symbol = 'USDT'),
+     bn AS (SELECT symbol, CAST(ts AS DATE) AS date, close FROM cex_spot WHERE venue = 'binance' AND interval = '1d')
+SELECT cb.symbol, cb.date, cb.close AS coinbase_usd, bn.close AS binance_usdt, u.usdt_usd,
+       (cb.close / (bn.close * coalesce(u.usdt_usd, 1)) - 1) * 1e4 AS premium_bp
+FROM cb JOIN bn USING (symbol, date) LEFT JOIN u USING (date)
+WHERE cb.date < current_date   -- completed days only
+ORDER BY cb.symbol, cb.date
+;;
+
+-- Open interest by exchange, daily (USD). Binance = USDT-margined perp; OKX = all its contracts for the coin;
+-- Bybit = USDT perp; Hyperliquid = perp (snapshotted hourly, so history starts when collection started).
+CREATE OR REPLACE VIEW v_oi_daily_by_venue AS
+SELECT CAST("timestamp" AS DATE) AS date, 'binance' AS venue, replace(symbol, 'USDT', '') AS symbol,
+       last(sum_open_interest_value ORDER BY "timestamp") AS oi_usd
+FROM binance_1h WHERE symbol IN ('BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT') GROUP BY 1, 2, 3
+UNION ALL
+SELECT CAST(ts AS DATE), venue, symbol, last(oi_usd ORDER BY ts)
+FROM deriv_oi WHERE (venue IN ('okx', 'bybit') AND interval = '1d') OR venue = 'hyperliquid' GROUP BY 1, 2, 3
+;;
+
+-- Funding by exchange, daily average, expressed per 8 hours in basis points (Hyperliquid pays hourly).
+CREATE OR REPLACE VIEW v_funding_daily AS
+SELECT CAST(ts AS DATE) AS date, venue, symbol, avg(funding_rate * 8 / interval_hours) * 1e4 AS funding_8h_bp
+FROM deriv_funding GROUP BY 1, 2, 3
+ORDER BY 1, 2, 3
+;;
+
+-- CME futures positioning (weekly), converted from contracts to coins.
+CREATE OR REPLACE VIEW v_cme_positioning AS
+SELECT report_date, asset,
+       sum(open_interest * units_per_contract) AS oi_coins,
+       sum((lev_long - lev_short) * units_per_contract) AS lev_funds_net_coins,
+       sum((am_long - am_short) * units_per_contract) AS asset_mgr_net_coins,
+       sum((dealer_long - dealer_short) * units_per_contract) AS dealer_net_coins
+FROM cftc_crypto GROUP BY 1, 2
+ORDER BY 1, 2
+;;
+
+-- Kimchi premium: Upbit KRW price vs Binance USDT price converted at USD/KRW (TradingView FX_IDC), in percent.
+-- Hourly uses the hourly FX rate when available (Dec 2025+), otherwise the daily rate. Completed periods only.
+CREATE OR REPLACE VIEW v_kimchi_premium_1h AS
+WITH up  AS (SELECT symbol, ts, close FROM cex_spot WHERE venue = 'upbit' AND interval = '1h'),
+     bn  AS (SELECT replace(symbol, 'USDT', '') AS symbol, "timestamp" AS ts, spot_close FROM binance_1h),
+     fxh AS (SELECT ts, close AS fx FROM tv_bars WHERE symbol = 'FX_IDC:USDKRW' AND interval = '1h'),
+     fxd AS (SELECT ts, close AS fx FROM tv_bars WHERE symbol = 'FX_IDC:USDKRW' AND interval = '1d'),
+     a   AS (SELECT up.symbol, up.ts, up.close, fxh.fx AS fx_h FROM up ASOF LEFT JOIN fxh ON up.ts >= fxh.ts),
+     b   AS (SELECT a.*, fxd.fx AS fx_d FROM a ASOF LEFT JOIN fxd ON a.ts >= fxd.ts),
+     c   AS (SELECT symbol, ts, close AS upbit_krw,
+                    CASE WHEN fx_h IS NOT NULL AND ts >= (SELECT min(ts) FROM fxh) THEN fx_h ELSE fx_d END AS usdkrw FROM b)
+SELECT c.symbol, c.ts, c.upbit_krw, c.usdkrw, bn.spot_close AS binance_usdt,
+       CASE WHEN c.symbol = 'USDT' THEN (c.upbit_krw / c.usdkrw - 1) * 100
+            ELSE (c.upbit_krw / (bn.spot_close * c.usdkrw) - 1) * 100 END AS premium_pct
+FROM c LEFT JOIN bn ON bn.symbol = c.symbol AND bn.ts = c.ts
+WHERE c.ts < date_trunc('hour', now()::TIMESTAMP) - INTERVAL 1 HOUR
+  AND (c.symbol = 'USDT' OR bn.spot_close IS NOT NULL)
+ORDER BY c.symbol, c.ts
+;;
+
+CREATE OR REPLACE VIEW v_kimchi_premium_1d AS
+WITH up  AS (SELECT symbol, ts, close FROM cex_spot WHERE venue = 'upbit' AND interval = '1d'),
+     bn  AS (SELECT symbol, ts, close FROM cex_spot WHERE venue = 'binance' AND interval = '1d'),
+     fxd AS (SELECT ts, close AS fx FROM tv_bars WHERE symbol = 'FX_IDC:USDKRW' AND interval = '1d'),
+     a   AS (SELECT up.symbol, up.ts, up.close, fxd.fx FROM up ASOF LEFT JOIN fxd ON up.ts >= fxd.ts)
+SELECT a.symbol, CAST(a.ts AS DATE) AS date, a.close AS upbit_krw, a.fx AS usdkrw, bn.close AS binance_usdt,
+       CASE WHEN a.symbol = 'USDT' THEN (a.close / a.fx - 1) * 100
+            ELSE (a.close / (bn.close * a.fx) - 1) * 100 END AS premium_pct
+FROM a LEFT JOIN bn ON bn.symbol = a.symbol AND bn.ts = a.ts
+WHERE CAST(a.ts AS DATE) < current_date AND (a.symbol = 'USDT' OR bn.close IS NOT NULL)
+ORDER BY a.symbol, date
+;;
+
+-- Spot volume by exchange, daily, USD (Upbit converted from KRW at the daily USD/KRW rate). Completed days only.
+CREATE OR REPLACE VIEW v_spot_volume_daily AS
+WITH fxd AS (SELECT ts, close AS fx FROM tv_bars WHERE symbol = 'FX_IDC:USDKRW' AND interval = '1d'),
+     s   AS (SELECT venue, symbol, ts, close, volume, volume_quote FROM cex_spot WHERE interval = '1d' AND symbol <> 'USDT'),
+     u   AS (SELECT s.*, fxd.fx FROM s ASOF LEFT JOIN fxd ON s.ts >= fxd.ts)
+SELECT CAST(ts AS DATE) AS date, venue, symbol,
+       CASE WHEN venue = 'upbit' THEN volume_quote / fx ELSE volume * close END AS volume_usd
+FROM u WHERE CAST(ts AS DATE) < current_date
+ORDER BY 1, 2, 3
+;;
+
+-- XRP rich list with the final holder type (see mdh/sources/xrpl_whales.py for the categories).
+CREATE OR REPLACE VIEW v_xrpl_richlist AS
+SELECT r.*, coalesce(r.label_category,
+                     CASE WHEN r.balance_xrp >= 1e6 AND (a.require_dest OR a.domain IS NOT NULL) THEN 'likely_custodial' END,
+                     'unlabeled') AS category,
+       a.account IS NOT NULL AS flags_checked
+FROM xrpl_richlist r LEFT JOIN xrpl_accounts a ON a.account = r.account
+;;
+
+-- XRP rich list by holder type and size. Balances only, escrow excluded.
+CREATE OR REPLACE VIEW v_xrp_holders_daily AS
+SELECT date, category,
+       CASE WHEN balance_xrp >= 1e8 THEN '100M+' WHEN balance_xrp >= 1e7 THEN '10M-100M'
+            WHEN balance_xrp >= 1e6 THEN '1M-10M' ELSE '<1M' END AS band,
+       count(*) AS accounts, sum(balance_xrp) AS xrp
+FROM v_xrpl_richlist GROUP BY ALL ORDER BY 1, 2, 3
+;;
+
+-- Day-over-day net change per holder type, matched account by account (so transfers between two accounts
+-- of the same type net to zero). An account that drops out of the top 10,000 counts as going to 0.
+-- net_10m / net_1m: accounts holding at least 10M / 1M XRP on either day.
+CREATE OR REPLACE VIEW v_xrp_whale_flow_daily AS
+WITH d   AS (SELECT DISTINCT date FROM xrpl_richlist),
+     p   AS (SELECT date, lag(date) OVER (ORDER BY date) AS prev FROM d),
+     cur AS (SELECT p.date, p.prev, r.account, r.category, r.balance_xrp FROM p JOIN v_xrpl_richlist r ON r.date = p.date
+             WHERE p.prev IS NOT NULL),
+     old AS (SELECT p.date, p.prev, r.account, r.category, r.balance_xrp FROM p JOIN v_xrpl_richlist r ON r.date = p.prev),
+     j   AS (SELECT coalesce(c.date, o.date) AS date, coalesce(c.prev, o.prev) AS prev_date,
+                    coalesce(c.account, o.account) AS account, coalesce(c.category, o.category) AS category,
+                    coalesce(c.balance_xrp, 0) AS now_xrp, coalesce(o.balance_xrp, 0) AS prev_xrp
+             FROM cur c FULL OUTER JOIN old o ON c.date = o.date AND c.account = o.account)
+SELECT date, prev_date, category,
+       sum(now_xrp - prev_xrp) FILTER (WHERE greatest(now_xrp, prev_xrp) >= 1e7) AS net_10m,
+       sum(now_xrp - prev_xrp) FILTER (WHERE greatest(now_xrp, prev_xrp) >= 1e6) AS net_1m,
+       sum(now_xrp - prev_xrp) AS net_all,
+       count(*) FILTER (WHERE now_xrp >= 1e7) AS accounts_10m
+FROM j GROUP BY ALL ORDER BY 1, 3

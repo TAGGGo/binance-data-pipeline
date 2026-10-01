@@ -52,6 +52,9 @@ class RateLimitedClient:
         self.timeout = timeout
         self._last_call: dict[str, float] = {}
         self.session = requests.Session()
+        # room for the archive thread pool (mdh/sources/binance_hist.py) without dropping connections
+        adapter = requests.adapters.HTTPAdapter(pool_connections=16, pool_maxsize=32)
+        self.session.mount("https://", adapter)
         self.session.headers.update({"User-Agent": UA, "Accept": "application/json, text/plain, */*"})
         self.calls_this_run: dict[str, int] = {}
         state_dir.mkdir(parents=True, exist_ok=True)
