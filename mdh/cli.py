@@ -75,6 +75,7 @@ def cmd_run(names: list[str], full: bool) -> int:
     log.info("views: %s", ", ".join(built))
     log.info("http calls this run: %s", ctx.http.calls_this_run)
     con.close()
+    db.snapshot()
     return 1 if failures else 0
 
 
