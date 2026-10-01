@@ -7,6 +7,8 @@ Tested 2026-09-28. All free. Keys live in `.env` (gitignored).
 | Binance Vision archive (`data.binance.vision`) | no | none (static files) | 1200/min | 2017+ (metrics ~2021+) | Daily zips appear ~T+1. |
 | Binance live spot (`data-api.binance.vision`) | no | 6000 weight/min | 600/min | recent | Public mirror, not geo-blocked. |
 | Binance live futures (`fapi.binance.com`) | no | 2400 weight/min | — | 30 days for OI/ratios | **HTTP 451 from US IPs.** Needs VPN; otherwise T-0 is filled from the archive next day. |
+| XRPScan (`api.xrpscan.com`) | no | unpublished | 10/min | none: current rich list only, history starts at the first run | Top 10,000 XRP accounts with entity names. One call per day. |
+| Ripple public XRPL server (`s2.ripple.com:51234`) | no | unpublished | 240/min | full ledger history | `account_info` flags (RequireDestTag, Domain) for unlabeled accounts >= 1M XRP, max 400 per run, cached 30 days. |
 | FRED (`api.stlouisfed.org`) | FRED_API_KEY | 120/min | 80/min | decades | Keyless `fredgraph.csv` times out from some networks — use the API. |
 | SoSoValue v1 (`openapi.sosovalue.com`) | SOSOVALUE_API_KEY | 10/min, 10k/month | 7/min, 9k/month | **last 30 days** | Covers BTC/ETH/SOL/XRP. Older ranges return 403 on free plan. |
 | SoSoValue v2 (`api.sosovalue.xyz`) | same key | 20/min | 14/min | last 300 days | BTC/ETH/SOL only; XRP empty. |

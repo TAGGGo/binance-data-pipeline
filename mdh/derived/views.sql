@@ -201,3 +201,42 @@ SELECT CAST(ts AS DATE) AS date, venue, symbol,
        CASE WHEN venue = 'upbit' THEN volume_quote / fx ELSE volume * close END AS volume_usd
 FROM u WHERE CAST(ts AS DATE) < current_date
 ORDER BY 1, 2, 3
+;;
+
+-- XRP rich list with the final holder type (see mdh/sources/xrpl_whales.py for the categories).
+CREATE OR REPLACE VIEW v_xrpl_richlist AS
+SELECT r.*, coalesce(r.label_category,
+                     CASE WHEN r.balance_xrp >= 1e6 AND (a.require_dest OR a.domain IS NOT NULL) THEN 'likely_custodial' END,
+                     'unlabeled') AS category,
+       a.account IS NOT NULL AS flags_checked
+FROM xrpl_richlist r LEFT JOIN xrpl_accounts a ON a.account = r.account
+;;
+
+-- XRP rich list by holder type and size. Balances only, escrow excluded.
+CREATE OR REPLACE VIEW v_xrp_holders_daily AS
+SELECT date, category,
+       CASE WHEN balance_xrp >= 1e8 THEN '100M+' WHEN balance_xrp >= 1e7 THEN '10M-100M'
+            WHEN balance_xrp >= 1e6 THEN '1M-10M' ELSE '<1M' END AS band,
+       count(*) AS accounts, sum(balance_xrp) AS xrp
+FROM v_xrpl_richlist GROUP BY ALL ORDER BY 1, 2, 3
+;;
+
+-- Day-over-day net change per holder type, matched account by account (so transfers between two accounts
+-- of the same type net to zero). An account that drops out of the top 10,000 counts as going to 0.
+-- net_10m / net_1m: accounts holding at least 10M / 1M XRP on either day.
+CREATE OR REPLACE VIEW v_xrp_whale_flow_daily AS
+WITH d   AS (SELECT DISTINCT date FROM xrpl_richlist),
+     p   AS (SELECT date, lag(date) OVER (ORDER BY date) AS prev FROM d),
+     cur AS (SELECT p.date, p.prev, r.account, r.category, r.balance_xrp FROM p JOIN v_xrpl_richlist r ON r.date = p.date
+             WHERE p.prev IS NOT NULL),
+     old AS (SELECT p.date, p.prev, r.account, r.category, r.balance_xrp FROM p JOIN v_xrpl_richlist r ON r.date = p.prev),
+     j   AS (SELECT coalesce(c.date, o.date) AS date, coalesce(c.prev, o.prev) AS prev_date,
+                    coalesce(c.account, o.account) AS account, coalesce(c.category, o.category) AS category,
+                    coalesce(c.balance_xrp, 0) AS now_xrp, coalesce(o.balance_xrp, 0) AS prev_xrp
+             FROM cur c FULL OUTER JOIN old o ON c.date = o.date AND c.account = o.account)
+SELECT date, prev_date, category,
+       sum(now_xrp - prev_xrp) FILTER (WHERE greatest(now_xrp, prev_xrp) >= 1e7) AS net_10m,
+       sum(now_xrp - prev_xrp) FILTER (WHERE greatest(now_xrp, prev_xrp) >= 1e6) AS net_1m,
+       sum(now_xrp - prev_xrp) AS net_all,
+       count(*) FILTER (WHERE now_xrp >= 1e7) AS accounts_10m
+FROM j GROUP BY ALL ORDER BY 1, 3

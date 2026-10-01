@@ -1,5 +1,5 @@
 """Source registry. Each source exposes run(ctx, full=False) -> {table: rows_written}."""
-from mdh.sources import coinmetrics, defillama, fred, nasdaq, seed_etf, sosovalue, tradingview
+from mdh.sources import binance_hist, bitwise, cex_reserves, near, coinmetrics, etf_issuers, defillama, fred, grayscale, nasdaq, seed_etf, sosovalue, tradingview, twentyone, xrpl_whales
 from mdh.sources.misc import cboe, coingecko, deribit, feargreed
 from mdh.sources.cex import binance_funding, binance_spot, bybit, cftc, coinbase, hyperliquid, okx, upbit
 
@@ -12,6 +12,10 @@ REGISTRY = {
     "coinmetrics": coinmetrics,
     "seed_etf": seed_etf,
     "sosovalue": sosovalue,
+    "grayscale": grayscale,
+    "bitwise": bitwise,
+    "twentyone": twentyone,
+    "etf_issuers": etf_issuers,
     "deribit": deribit,
     "feargreed": feargreed,
     "coingecko": coingecko,
@@ -24,6 +28,10 @@ REGISTRY = {
     "cftc": cftc,
     "binance_funding": binance_funding,
     "upbit": upbit,
+    "binance_hist": binance_hist,
+    "xrpl_whales": xrpl_whales,
+    "cex_reserves": cex_reserves,
+    "near": near,
 }
 
 

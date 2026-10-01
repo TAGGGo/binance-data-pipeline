@@ -3,7 +3,7 @@ Cross-exchange data: spot candles (Coinbase, Binance), open interest and funding
 (OKX, Bybit, Hyperliquid) and CME positioning (CFTC Traders in Financial Futures).
 
 Tables
-  cex_spot      (venue, symbol, interval, ts, open, high, low, close, volume)      symbol = BTC, ETH, SOL, XRP, USDT
+  cex_spot      (venue, symbol, interval, ts, open, high, low, close, volume)      symbol = BTC, ETH, SOL, XRP, USDT (+ settings.COINBASE_EXTRA on Coinbase)
   deriv_oi      (venue, symbol, interval, ts, oi_usd, volume_usd)
   deriv_funding (venue, symbol, ts, funding_rate, interval_hours)                  raw rate per funding interval
   cftc_crypto   (report_date, market, asset, units_per_contract, open_interest, ...positions by trader group)
@@ -11,8 +11,9 @@ Tables
 Notes (tested 2026-09-28)
   * Coinbase: full candle history (BTC-USD from 2015-07), 300 candles per call, no key.
   * OKX: open interest history is short (last 180 days daily / 30 days hourly); funding ~3 months.
-  * Bybit: refuses US IPs (403). It runs in the VPN step of scripts/run_update.sh together with Binance.
-  * Hyperliquid: no open-interest history API, so we snapshot it every run; funding history from 2023.
+  * Bybit: refuses US IPs (403). It runs in the VPN step of scripts/ops/run_update.sh together with Binance.
+  * Hyperliquid: no open-interest history API, so we snapshot it every run (every coin-page coin); funding history
+    from 2023 for the majors, settings.HL_FUNDING_START_EXTRA for the rest; spot candles for settings.HL_SPOT.
   * CFTC: weekly (as of Tuesday, published Friday).
 """
 from __future__ import annotations
@@ -43,9 +44,11 @@ class coinbase:
     @staticmethod
     def run(ctx, full=False):
         total = 0
-        for asset in ASSETS + ["USDT"]:
+        for asset in ASSETS + ["USDT"] + settings.COINBASE_EXTRA:
             for interval, gran in coinbase.GRAN.items():
                 start = pd.Timestamp(settings.CEX_SPOT_START[interval])
+                if asset in settings.COINBASE_EXTRA:
+                    start = max(start, pd.Timestamp(settings.COINBASE_EXTRA_START))
                 last = None if full else _last_ts(ctx.con, "cex_spot", "venue='coinbase' AND symbol=? AND interval=?", [asset, interval])
                 if last is not None:
                     start = max(start, last - pd.Timedelta(seconds=3 * gran))
@@ -228,13 +231,18 @@ class hyperliquid:
     URL = "https://api.hyperliquid.xyz/info"
 
     @staticmethod
+    def perp_assets():
+        return list(dict.fromkeys(ASSETS + settings.COIN_PAGES))
+
+    @staticmethod
     def run(ctx, full=False):
-        # 1) open-interest snapshot (no history API: we build it hour by hour)
+        assets = hyperliquid.perp_assets()
+        # 1) open-interest snapshot for every perp we follow (no history API: we build it hour by hour)
         meta, ctxs = ctx.http.post(hyperliquid.URL, json={"type": "metaAndAssetCtxs"}).json()
         names = [u["name"] for u in meta["universe"]]
         now_h = pd.Timestamp(NOW()).floor("h")
         snap = []
-        for asset in ASSETS:
+        for asset in assets:
             if asset in names:
                 c = ctxs[names.index(asset)]
                 mark = float(c["markPx"])
@@ -244,9 +252,12 @@ class hyperliquid:
         # 2) funding history (hourly), paging forward from the last stored point
         fund_n = 0
         end_ms = int(time.time() * 1000)
-        for asset in ASSETS:
+        for asset in assets:
+            if asset not in names:
+                continue
             last = None if full else _last_ts(ctx.con, "deriv_funding", "venue='hyperliquid' AND symbol=?", [asset])
-            start = int(((last + pd.Timedelta(minutes=1)) if last is not None else pd.Timestamp(settings.HL_FUNDING_START)).timestamp() * 1000)
+            first = settings.HL_FUNDING_START if asset in ASSETS else settings.HL_FUNDING_START_EXTRA
+            start = int(((last + pd.Timedelta(minutes=1)) if last is not None else pd.Timestamp(first)).timestamp() * 1000)
             rows = []
             for _ in range(200):
                 data = ctx.http.post(hyperliquid.URL, json={"type": "fundingHistory", "coin": asset, "startTime": start}).json()
@@ -263,7 +274,32 @@ class hyperliquid:
                                     "ts": pd.to_datetime(df["time"].astype("int64"), unit="ms").dt.floor("min"),
                                     "funding_rate": df["fundingRate"].astype(float), "interval_hours": 1.0})
                 fund_n += db.upsert(ctx.con, "deriv_funding", out, ["venue", "symbol", "ts"])
-        return {"deriv_oi": oi_n, "deriv_funding": fund_n}
+        # 3) spot candles (settings.HL_SPOT), e.g. HYPE/USDC; the API serves the last 5000 candles per interval
+        spot_n = 0
+        for asset, pair in settings.HL_SPOT.items():
+            for interval, ms in (("1h", 3_600_000), ("1d", 86_400_000)):
+                last = None if full else _last_ts(ctx.con, "cex_spot", "venue='hyperliquid' AND symbol=? AND interval=?", [asset, interval])
+                start = int(((last - pd.Timedelta(milliseconds=3 * ms)) if last is not None else pd.Timestamp("2024-11-01")).timestamp() * 1000)
+                rows = []
+                for _ in range(20):
+                    data = ctx.http.post(hyperliquid.URL, json={"type": "candleSnapshot", "req": {
+                        "coin": pair, "interval": interval, "startTime": start, "endTime": end_ms}}).json()
+                    if not data:
+                        break
+                    rows += data
+                    newest = max(int(r["t"]) for r in data)
+                    if newest + ms >= end_ms or len(data) < 5000:
+                        break
+                    start = newest + ms
+                if rows:
+                    df = pd.DataFrame(rows)
+                    out = pd.DataFrame({"venue": "hyperliquid", "symbol": asset, "interval": interval,
+                                        "ts": pd.to_datetime(df["t"].astype("int64"), unit="ms"),
+                                        "open": df["o"].astype(float), "high": df["h"].astype(float),
+                                        "low": df["l"].astype(float), "close": df["c"].astype(float),
+                                        "volume": df["v"].astype(float)})
+                    spot_n += db.upsert(ctx.con, "cex_spot", out, ["venue", "symbol", "interval", "ts"])
+        return {"deriv_oi": oi_n, "deriv_funding": fund_n, "cex_spot": spot_n}
 
 
 # ============================================================================ CFTC: CME crypto futures positioning (weekly)
@@ -317,7 +353,7 @@ class binance_funding:
         import os
         url = os.environ.get("BINANCE_FAPI", "https://fapi.binance.com") + "/fapi/v1/fundingRate"
         total = 0
-        for asset in ASSETS:
+        for asset in settings.BINANCE_FUNDING_ASSETS:
             last = None if full else _last_ts(ctx.con, "deriv_funding", "venue='binance' AND symbol=?", [asset])
             start_ms = int(((last - pd.Timedelta(hours=8)) if last is not None else pd.Timestamp("2019-09-01")).timestamp() * 1000)
             rows = []
@@ -332,8 +368,11 @@ class binance_funding:
             if rows:
                 df = pd.DataFrame(rows)
                 t = df["fundingTime"].astype("int64")
-                out = pd.DataFrame({"venue": "binance", "symbol": asset, "ts": pd.to_datetime(t, unit="ms").dt.floor("min"),
-                                    "funding_rate": df["fundingRate"].astype(float), "interval_hours": 8.0})
+                ts = pd.to_datetime(t, unit="ms").dt.floor("min")
+                # alts can settle every 4h (or switch over time): record the actual gap to the previous settlement
+                gap = ts.diff().dt.total_seconds().div(3600).round(2).bfill().fillna(8.0)
+                out = pd.DataFrame({"venue": "binance", "symbol": asset, "ts": ts,
+                                    "funding_rate": df["fundingRate"].astype(float), "interval_hours": gap})
                 total += db.upsert(ctx.con, "deriv_funding", out, ["venue", "symbol", "ts"])
         return {"deriv_funding": total}
 
