@@ -127,6 +127,11 @@ COINMETRICS_ASSETS = ["btc", "eth"]
 COINMETRICS_METRICS = ["PriceUSD", "CapMrktCurUSD", "CapMVRVCur", "AdrActCnt", "TxCnt", "SplyCur"]
 DEFILLAMA_STABLES = {"ALL": None, "USDT": 1, "USDC": 2}   # name: DefiLlama stablecoin id
 DERIBIT_DVOL = ["BTC", "ETH"]
+DERIBIT_OPTIONS = ["BTC", "ETH"]          # hourly options snapshot (mdh/sources/options.py), builds forward from 2026-10-02
+# Coinbase taker flow (mdh/sources/flows.py): 15m buy/sell buckets from public trades. ~25 calls/hour/product.
+CB_TRADES_PRODUCTS = ["BTC", "ETH"]
+CB_TRADES_BACKFILL_HOURS = 24             # first run only (~1,500 calls, ~10 min)
+CB_TRADES_MAX_PAGES = 2000                # per product per run (safety cap)
 # Exchange balances (mdh/sources/cex_reserves.py): DefiLlama CEX transparency slugs, largest first (2026-09-30).
 # Coinbase, Kraken, Upbit, Bithumb publish no wallet list, so they are not here.
 CEX_RESERVE_EXCHANGES = ["binance-cex", "okx", "bitfinex", "bybit", "robinhood", "gate", "bitget", "gemini", "mexc",

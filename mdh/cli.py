@@ -90,6 +90,8 @@ STATUS_TABLES = [
     ("etf_flows_daily", "date", "asset || ' ' || source"),
     ("etf_flows_by_fund", "date", "asset"),
     ("deribit_dvol", "date", "currency"),
+    ("deribit_opt_summary", "ts", "currency"),
+    ("cb_taker_15m", "ts", "symbol"),
     ("fear_greed", "date", None),
     ("vix_daily", "date", None),
     ("cg_global_snapshot", "ts", None),
