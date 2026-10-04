@@ -61,12 +61,16 @@ class TestHttp(unittest.TestCase):
 
 class TestUpsert(unittest.TestCase):
     def test_upsert_replaces_and_adds_columns(self):
-        con = db.connect()
-        db.upsert(con, "t", pd.DataFrame({"k": [1, 2], "v": [10.0, 20.0]}), ["k"])
-        db.upsert(con, "t", pd.DataFrame({"k": [2, 3], "v": [21.0, 30.0], "extra": ["a", "b"]}), ["k"])
-        rows = con.execute("SELECT k, v, extra FROM t ORDER BY k").fetchall()
-        self.assertEqual(rows, [(1, 10.0, None), (2, 21.0, "a"), (3, 30.0, "b")])
-        self.assertEqual(db.max_value(con, "t", "k"), 3)
+        # settings may already be imported by another test module, so pin the DB path explicitly
+        tmp_db = Path(tempfile.mkdtemp()) / "test.duckdb"
+        with mock.patch.object(db.settings, "DB_PATH", tmp_db):
+            con = db.connect()
+            db.upsert(con, "t", pd.DataFrame({"k": [1, 2], "v": [10.0, 20.0]}), ["k"])
+            db.upsert(con, "t", pd.DataFrame({"k": [2, 3], "v": [21.0, 30.0], "extra": ["a", "b"]}), ["k"])
+            rows = con.execute("SELECT k, v, extra FROM t ORDER BY k").fetchall()
+            self.assertEqual(rows, [(1, 10.0, None), (2, 21.0, "a"), (3, 30.0, "b")])
+            self.assertEqual(db.max_value(con, "t", "k"), 3)
+            con.close()
 
 
 if __name__ == "__main__":

@@ -1,6 +1,10 @@
 """DuckDB storage: one file (data/market.duckdb), idempotent upserts, ingest log."""
 from __future__ import annotations
 
+import os
+import shutil
+import sys
+import time
 from datetime import datetime, timezone
 
 import duckdb
@@ -20,12 +24,31 @@ CREATE TABLE IF NOT EXISTS _ingest_log (
 )"""
 
 
+SNAPSHOT_PATH = settings.DB_PATH.with_name("market.snapshot.duckdb")
+
+
 def connect(read_only: bool = False) -> duckdb.DuckDBPyConnection:
+    """Open the DB. DuckDB allows one writer process and refuses readers meanwhile, so while the
+    hourly update holds the file a read-only caller falls back to the last finished snapshot."""
     settings.DATA_DIR.mkdir(parents=True, exist_ok=True)
-    con = duckdb.connect(str(settings.DB_PATH), read_only=read_only)
+    try:
+        con = duckdb.connect(str(settings.DB_PATH), read_only=read_only)
+    except duckdb.IOException:
+        if not (read_only and SNAPSHOT_PATH.exists()):
+            raise
+        age = (time.time() - SNAPSHOT_PATH.stat().st_mtime) / 60
+        print(f"[mdh] update is running; reading snapshot from {age:.0f} min ago", file=sys.stderr)
+        return duckdb.connect(str(SNAPSHOT_PATH), read_only=True)
     if not read_only:
         con.execute(LOG_DDL)
     return con
+
+
+def snapshot() -> None:
+    """Copy the (closed) DB so readers have something to query while the next update runs."""
+    tmp = SNAPSHOT_PATH.with_suffix(".tmp")
+    shutil.copy2(settings.DB_PATH, tmp)
+    os.replace(tmp, SNAPSHOT_PATH)
 
 
 def table_exists(con, table: str) -> bool:

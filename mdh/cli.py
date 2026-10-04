@@ -75,6 +75,7 @@ def cmd_run(names: list[str], full: bool) -> int:
     log.info("views: %s", ", ".join(built))
     log.info("http calls this run: %s", ctx.http.calls_this_run)
     con.close()
+    db.snapshot()
     return 1 if failures else 0
 
 
@@ -89,6 +90,8 @@ STATUS_TABLES = [
     ("etf_flows_daily", "date", "asset || ' ' || source"),
     ("etf_flows_by_fund", "date", "asset"),
     ("deribit_dvol", "date", "currency"),
+    ("deribit_opt_summary", "ts", "currency"),
+    ("cb_taker_15m", "ts", "symbol"),
     ("fear_greed", "date", None),
     ("vix_daily", "date", None),
     ("cg_global_snapshot", "ts", None),
