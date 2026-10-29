@@ -27,38 +27,58 @@ fi
 trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 
 log "start (vpn mode: $VPN_MODE)"
-VPN_SRC="binance bybit binance_funding"   # need a non-US connection (see VPN_SOURCES in mdh/settings.py)
-OTHERS=$("$PY" -m mdh sources | grep -vxE 'binance|bybit|binance_funding' | tr '\n' ' ')
+VPN_SRC="binance bybit binance_funding oi5m"   # need a non-US connection (see VPN_SOURCES in mdh/settings.py)
+OTHERS=$("$PY" -m mdh sources | grep -vxE 'binance|bybit|binance_funding|oi5m' | tr '\n' ' ')
 "$PY" -m mdh update $OTHERS
 
-vpn_connected() { "$CTL" status 2>/dev/null | grep -qiE '^[[:space:]]*connected|connected to' && ! "$CTL" status 2>/dev/null | grep -qiE 'disconnected|not connected'; }
-WE_CONNECTED=0
+# VPN on/off goes through ~/Projects/vpn_session.py, shared with the btc-volatility monitor so one job
+# never disconnects the VPN while another is still using it (last one out disconnects, only if a job connected it).
+VPNS="$REPO/../../vpn_session.py"
+IN_VPN=0
 if [[ "$VPN_MODE" == "binance" ]]; then
-  if [[ -z "$CTL" ]]; then
-    log "expressvpnctl not found; running Binance without VPN"
-  elif vpn_connected; then
-    log "VPN already connected; leaving it as is"
+  if [[ -z "$CTL" || ! -f "$VPNS" ]]; then
+    log "expressvpnctl or vpn_session.py not found; running Binance without VPN"
   else
-    # MDH_VPN_LOCATION may be an exact region id (japan-tokyo) or just a prefix (japan): take the first match
-    REGION="$("$CTL" get regions 2>/dev/null | grep -i "^${VPN_LOCATION}" | head -1)"
-    VPN_LOCATION="${REGION:-$VPN_LOCATION}"
-    log "connecting ExpressVPN ($VPN_LOCATION)"
-    "$CTL" connect "$VPN_LOCATION" >/dev/null 2>&1 &
-    for _ in $(seq 1 30); do sleep 2; vpn_connected && break; done
-    if vpn_connected; then WE_CONNECTED=1; log "VPN connected"; else log "VPN did not connect in 60s; running Binance without it"; fi
+    log "VPN on for the Binance step ($VPN_LOCATION)"
+    IN_VPN=1
+    if /usr/bin/python3 "$VPNS" enter datahub $$ "$VPN_LOCATION" >/dev/null; then log "VPN connected"; else log "VPN did not connect in 60s; running Binance without it"; fi
   fi
 fi
 
 "$PY" -m mdh update $VPN_SRC
 
-if [[ "$WE_CONNECTED" == 1 ]]; then
-  "$CTL" disconnect >/dev/null 2>&1 && log "VPN disconnected (restored previous state)"
+if [[ "$IN_VPN" == 1 ]]; then
+  log "VPN: $(/usr/bin/python3 "$VPNS" leave datahub $$)"
 fi
 # BTC on-chain metrics from BGeometrics free API (1 request per metric per UTC day; quota 10/h, 15/day)
 "$PY" scripts/ops/fetch_bgeometrics.py 2>&1 | while read -r line; do log "$line"; done
+# 水博乱乱 mrluanluan.com: once per UTC day, ONLY data we lack (IBIT options OI + GEX, exchange stablecoin reserves, his USDT ammo score)
+"$PY" scripts/ops/fetch_mrluanluan.py 2>&1 | while read -r line; do log "$line"; done
+# Deribit BTC option trades (history.deribit.com, public): daily call/put taker premium by bucket, catch-up of closed UTC days (backfill since 2019 done 2026-10-17)
+"$PY" scripts/ops/fetch_deribit_opt_trades.py 2>&1 | while read -r line; do log "$line"; done
+# data completeness check (Avalon 10/23: any missing hour must be investigated): prints GAP lines, writes data/state/gaps.json
+"$PY" scripts/ops/check_gaps.py 2>&1 | while read -r line; do log "$line"; done
 # rebuild the dashboard data file (data/dashboard/data.json); publishing it to the artifact is a separate step
 if "$PY" -m mdh export >/dev/null; then log "dashboard data.json exported"; else log "mdh export failed"; fi
 # daily ETF report to WeChat via PushPlus (sends once per new session, after 13:00 UTC; needs PUSHPLUS_TOKEN in .env)
 "$PY" scripts/ops/push_etf_report.py 2>&1 | while read -r line; do log "$line"; done
+# 币聊今日日报的数据块（持仓体检、异动、信号灯、板块、资金面、宏观、大事）
+"$PY" scripts/ops/report_blocks.py 2>&1 | while read -r line; do log "$line"; done
+# 日报更新后给爸爸发一句微信提醒（任务写完日报会立刻发；这里是兜底）
+"$PY" scripts/ops/push_report_notice.py 2>&1 | while read -r line; do log "$line"; done
+
+# US stock trend alerts (ES/NQ/RSP, LEI-style lines) to Avalon's WeChat; daily report after the US close
+"$PY" scripts/ops/us_trend_alert.py 2>&1 | while read -r line; do log "us_trend: $line"; done
+
+"$PY" scripts/ops/node_status.py 2>&1 | while read -r line; do log "$line"; done
+"$PY" scripts/onchain/node_urpd.py 2>&1 | while read -r line; do log "$line"; done
+# BTC supply concentration near5 (daily + live hourly + Q1 v1.1 status) from the node URPD -> data/onchain/node_conc_daily.csv, node_conc_live.json
+"$PY" scripts/onchain/node_conc.py 2>&1 | while read -r line; do log "$line"; done
+# Supply-quantile cost basis (Murphy 分位成本线) q50..q75 -> data/onchain/cost_quantiles_daily.csv (added 2026-10-27)
+"$PY" scripts/onchain/node_quantiles.py 2>&1 | while read -r line; do log "$line"; done
+
+# Raw on-chain table from AWS Open Data (data/chain/raw: tx/outputs/inputs per UTC day; added 2026-10-29, see claude/ats-build-research-2026-10-29.md)
+# re-pulls today+yesterday, then backfills newest-first down to MDH_CHAIN_FLOOR within MDH_CHAIN_BUDGET seconds
+"$PY" scripts/chain/aws_backfill.py 2>&1 | while read -r line; do log "$line"; done
 
 log "done"

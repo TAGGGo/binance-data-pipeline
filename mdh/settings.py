@@ -41,6 +41,7 @@ HOST_RPM = {
     "www.deribit.com": 60,                 # 20 req/s credit system
     "api.alternative.me": 20,
     "data-api.binance.vision": 600,        # weight 6000/min
+    "fapi.binance.com": 120,               # fundingRate shares 500 / 5 min / IP; the rest is weight 2400/min
     "data.binance.vision": 1200,           # static archive
     "cdn.cboe.com": 20,
     "api.exchange.coinbase.com": 300,      # public: 10 req/s
@@ -63,14 +64,21 @@ MONTHLY_QUOTA = {
 # ----------------------------------------------------------------------------- Binance
 BINANCE_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "ZECUSDT", "DASHUSDT", "STRKUSDT",
                    "ZENUSDT", "LDOUSDT", "ENAUSDT", "AAVEUSDT", "SUIUSDT", "UNIUSDT", "NEARUSDT", "DOGEUSDT",
-                   "HYPEUSDT"]
+                   "HYPEUSDT", "ADAUSDT", "FETUSDT"]
 BINANCE_INTERVALS = ["1h"]
 BINANCE_START = "2024-08-01"
+# + the top-50 list (settings.TOP50, defined below the coin pages). The parser handles 1000SHIB / 1000PEPE perps itself;
+# NEXO has no perp. Their history comes from binance_hist, so the VPN step only fetches the last few days.
+_TOP50_EXTRA = ["BNB", "TRX", "LINK", "XLM", "BCH", "LTC", "AVAX", "HBAR", "GRAM", "QNT", "TAO", "SHIB", "PUMP", "ONDO",
+                "WLD", "ASTER", "DOT", "SKY", "ICP", "MORPHO", "WLFI", "PEPE", "ETC", "ARB", "JUP", "JST", "POL", "ALGO",
+                "RENDER", "ATOM", "FIL", "ZRO", "AERO", "NIGHT", "INJ", "CAKE", "ETHFI"]
+BINANCE_SYMBOLS += [f"{c}USDT" for c in _TOP50_EXTRA]
 # symbols whose history intentionally starts later (keeps the hourly run from backfilling them)
 # coin-page coins added later: their history comes from binance_hist (archive), so the hourly VPN step only
 # needs the last few days (it supplies today's live perp price, OI and ratios)
 BINANCE_START_OVERRIDES = {"DASHUSDT": "2025-08-01", "STRKUSDT": "2025-08-01",
-                           **{f"{c}USDT": "2026-09-22" for c in ["ZEN", "LDO", "ENA", "AAVE", "SUI", "UNI", "NEAR", "DOGE", "HYPE"]}}
+                           **{f"{c}USDT": "2026-09-22" for c in ["ZEN", "LDO", "ENA", "AAVE", "SUI", "UNI", "NEAR", "DOGE", "HYPE", "ADA", "FET"]},
+                           **{f"{c}USDT": "2026-10-04" for c in _TOP50_EXTRA}}
 
 # ----------------------------------------------------------------------------- FRED (id: description)
 FRED_SERIES = {
@@ -98,6 +106,8 @@ EQUITIES = {  # ticker: asset class for api.nasdaq.com
     "SPY": "etf", "QQQ": "etf", "IWM": "etf", "TLT": "etf", "GLD": "etf",
     "IBIT": "etf", "FBTC": "etf", "ETHA": "etf",
     "MSTR": "stocks", "COIN": "stocks", "NVDA": "stocks", "HOOD": "stocks",
+    "SMH": "etf", "DIA": "etf",                             # semis / Dow (added 2026-10-17)
+    "GOOG": "stocks", "ORCL": "stocks", "CRCL": "stocks",  # Avalon holdings (added 2026-10-17)
 }
 EQUITY_START = "2015-01-01"
 
@@ -107,8 +117,10 @@ TV_SYMBOLS = [
     ("CRYPTOCAP", "BTC.D"), ("CRYPTOCAP", "ETH.D"), ("CRYPTOCAP", "OTHERS.D"),
     ("CRYPTOCAP", "USDT.D"), ("CRYPTOCAP", "USDC.D"),
     ("TVC", "DXY"), ("TVC", "US10Y"), ("TVC", "US02Y"),
+    ("TVC", "US05Y"), ("TVC", "US30Y"),   # added 2026-10-28 (Avalon: 2/5/10/30Y yields card)
     ("BITSTAMP", "BTCUSD"),   # long BTC OHLC history (2011+) for candles and weekly moving averages
     ("FX_IDC", "USDKRW"),     # USD/KRW for the Kimchi premium
+    ("KRAKEN", "XMRUSD"),     # Monero: Binance delisted it in 2024 (币聊 隐私币 sector, Avalon 10-28)
 ]
 TV_INTERVALS = ["1d", "1h"]   # daily = full history; hourly = rolling ~2 months, accumulated going forward
 
@@ -122,6 +134,12 @@ ISSUER_ETFS = {
     "NEAR": [{"ticker": "NRR", "issuer": "bitwise", "url": "https://nrretf.com/", "listing": "2026-09-29"}],
     "HYPE": [{"ticker": "THYP", "issuer": "21shares", "listing": "2026-05-12"},
              {"ticker": "BHYP", "issuer": "bitwise", "url": "https://www.bhypetf.com/", "listing": "2026-05-15"}],
+    # SUI spot ETPs (added 2026-10-07). Leveraged 21Shares 2x SUI (swap-based) left out on purpose.
+    # grayscale = the fund's daily workbook (grayscale.py; T+1 shares, so flow_lag=1), canary = fund page history table.
+    "SUI": [{"ticker": "GSUI", "issuer": "grayscale", "product_id": "7acb170a-2922-453b-88d8-64337392ac02",
+             "listing": "2026-02-18", "flow_lag": 1},
+            {"ticker": "SUIS", "issuer": "canary", "url": "https://canaryetfs.com/suis/", "listing": "2026-02-18"},
+            {"ticker": "TSUI", "issuer": "21shares", "listing": "2026-02-24"}],
 }
 COINMETRICS_ASSETS = ["btc", "eth"]
 COINMETRICS_METRICS = ["PriceUSD", "CapMrktCurUSD", "CapMVRVCur", "AdrActCnt", "TxCnt", "SplyCur"]
@@ -132,6 +150,15 @@ DERIBIT_OPTIONS = ["BTC", "ETH"]          # hourly options snapshot (mdh/sources
 CB_TRADES_PRODUCTS = ["BTC", "ETH"]
 CB_TRADES_BACKFILL_HOURS = 24             # first run only (~1,500 calls, ~10 min)
 CB_TRADES_MAX_PAGES = 2000                # per product per run (safety cap)
+# 5-minute OI by venue in coins (mdh/sources/oi5m.py, added 2026-10-08). oi5m_okx runs normally; oi5m (Binance+Bybit) in the VPN step.
+OI5M_ASSETS = ["BTC", "ETH", "SOL", "XRP"]
+# Hyperliquid big-account positions / liquidation prices / trigger orders (mdh/sources/hl_whales.py, added 2026-10-08)
+HL_WHALE_TOP_VALUE = 200                  # top accounts by account value (daily leaderboard refresh)
+HL_WHALE_TOP_VOLUME = 150                 # + top accounts by 30-day volume with account value >= $1M
+HL_WHALE_COINS = ["BTC", "ETH", "SOL", "XRP", "HYPE", "ZEC", "NEAR", "SUI", "DOGE"]
+HL_WHALE_MIN_POS_USD = 250_000
+HL_WHALE_MIN_ORDER_USD = 100_000
+HL_WHALE_SLEEP = 0.15                     # s between info calls (weight 2-20 each; HL allows 1200 weight/min)
 # Exchange balances (mdh/sources/cex_reserves.py): DefiLlama CEX transparency slugs, largest first (2026-09-30).
 # Coinbase, Kraken, Upbit, Bithumb publish no wallet list, so they are not here.
 CEX_RESERVE_EXCHANGES = ["binance-cex", "okx", "bitfinex", "bybit", "robinhood", "gate", "bitget", "gemini", "mexc",
@@ -145,11 +172,11 @@ NEAR_SUPPLY_START = "2024-01-01"                   # weekly supply points back t
 
 # ----------------------------------------------------------------------------- Coin pages (mdh/sources/binance_hist.py, mdh/indicators.py)
 COIN_TABS = ["BTC", "ETH", "XRP", "SOL", "ZEC"]     # own tab each on the dashboard
-COIN_MORE = ["DASH", "ZEN", "LDO", "ENA", "AAVE", "SUI", "UNI", "NEAR", "DOGE", "HYPE"]   # under "More coins"
+COIN_MORE = ["DASH", "ZEN", "LDO", "ENA", "AAVE", "SUI", "UNI", "NEAR", "DOGE", "HYPE", "ADA", "FET", "STRK"]   # under "More coins"
 COIN_PAGES = COIN_TABS + COIN_MORE                   # candles, MAs, MACD, RSI, funding, OI, CVD for each
 # "Since" tab: every coin-page coin's move from one fixed moment (Avalon's XRP entry, 2:00 AM PDT Sep 18)
 # PushPlus daily report (scripts/ops/push_etf_report.py): written for Avalon's dad and his holdings
-PUSH_HOLDINGS = ["ETH", "SOL", "ZEC", "NEAR", "UNI"]
+PUSH_HOLDINGS = ["ETH", "SOL", "ZEC", "NEAR", "SUI", "UNI"]
 PUSH_SECTORS = {"隐私币": ["ZEC", "DASH", "ZEN"], "公链": ["ETH", "SOL", "NEAR", "SUI"],
                 "DeFi": ["AAVE", "UNI", "LDO", "ENA"], "其他": ["XRP", "DOGE", "HYPE"]}
 # FOMC meeting days (second day = decision, 2:00 PM New York), from federalreserve.gov/monetarypolicy/fomccalendars.htm
@@ -159,14 +186,38 @@ FOMC_DECISIONS = ["2026-01-28", "2026-03-18", "2026-04-29", "2026-06-17", "2026-
 SINCE_BASE_UTC = "2026-09-18 09:00"
 SINCE_LABEL = "Sep 18, 2:00 AM PDT"
 COIN_HOURLY_START = "2023-01-01"                     # hourly klines kept from here (4h candles)
-BINANCE_FUNDING_ASSETS = COIN_PAGES
+# Top-50 research universe (added 2026-10-07, Avalon): CoinGecko top 50 by market cap on 2026-10-07, minus
+# stablecoins / wrapped / tokenized assets and anything without a Binance USDT spot pair. Binance data only:
+# spot + perp klines (1d, 1h), OI / long-short metrics, funding; live OI via the VPN step. No coin page, Coinbase or
+# Hyperliquid for these. The list is fixed (not re-ranked automatically): scripts/tools/top50.py shows the drift.
+TOP50 = ["ETH", "BNB", "XRP", "SOL", "TRX", "ZEC", "HYPE", "DOGE", "LINK", "ADA", "NEAR", "XLM", "BCH", "LTC", "UNI",
+         "AVAX", "SUI", "HBAR", "GRAM", "QNT", "TAO", "SHIB", "ENA", "PUMP", "AAVE", "ONDO", "WLD", "ASTER", "DOT",
+         "SKY", "ICP", "MORPHO", "WLFI", "PEPE", "ETC", "ARB", "JUP", "JST", "POL", "ALGO", "RENDER", "ATOM", "FIL",
+         "ZRO", "NEXO", "AERO", "NIGHT", "INJ", "CAKE", "ETHFI"]
+TOP50_AS_OF = "2026-10-07"
+BINANCE_UNIVERSE = list(dict.fromkeys(COIN_PAGES + TOP50))     # every coin with Binance data (binance_hist)
+PERP_SYMBOL = {"SHIB": ("1000SHIBUSDT", 1000), "PEPE": ("1000PEPEUSDT", 1000)}   # perps quoted per 1000 coins
+NO_PERP = {"NEXO"}                                    # spot only on Binance
+BINANCE_FUNDING_ASSETS = [c for c in BINANCE_UNIVERSE if c not in NO_PERP]
+# Top-50 coins on Coinbase (USD pairs, checked 2026-10-08) and Hyperliquid perps (added 2026-10-08, Avalon).
+# Not on Coinbase: TRX GRAM JUP JST NEXO NIGHT. Not on Hyperliquid: QNT JST NEXO NIGHT.
+TOP50_COINBASE = ["BNB", "LINK", "XLM", "BCH", "LTC", "AVAX", "HBAR", "QNT", "TAO", "SHIB", "PUMP", "ONDO", "WLD",
+                  "ASTER", "DOT", "SKY", "ICP", "MORPHO", "WLFI", "PEPE", "ETC", "ARB", "POL", "ALGO", "RENDER", "ATOM",
+                  "FIL", "ZRO", "AERO", "INJ", "CAKE", "ETHFI"]
+TOP50_HL = ["BNB", "TRX", "LINK", "XLM", "BCH", "LTC", "AVAX", "HBAR", "GRAM", "TAO", "SHIB", "PUMP", "ONDO", "WLD",
+            "ASTER", "DOT", "SKY", "ICP", "MORPHO", "WLFI", "PEPE", "ETC", "ARB", "JUP", "POL", "ALGO", "RENDER", "ATOM",
+            "FIL", "ZRO", "AERO", "INJ", "CAKE", "ETHFI"]
+HL_SYMBOL = {"SHIB": "kSHIB", "PEPE": "kPEPE"}       # Hyperliquid lists these per 1000 coins (OI in USD is unaffected)
+# Hyperliquid funding for top-50-only coins is fetched every N hours (hourly funding pages forward, nothing is lost);
+# keeps the hourly run at ~25 Hyperliquid calls, well under its 1200 weight/min.
+HL_TOP50_FUNDING_EVERY_H = 6
 
 # ----------------------------------------------------------------------------- Cross-exchange (mdh/sources/cex.py)
 CEX_ASSETS = ["BTC", "ETH", "SOL", "XRP"]
 CEX_SPOT_START = {"1h": "2024-08-01", "1d": "2015-01-01"}   # Coinbase candles
 # coin-page coins that also trade on Coinbase (USD): candles for their Coinbase premium (rebound signals).
 # Shorter history than the four majors to keep the first backfill light.
-COINBASE_EXTRA = [c for c in COIN_PAGES if c not in CEX_ASSETS]
+COINBASE_EXTRA = [c for c in COIN_PAGES if c not in CEX_ASSETS] + [c for c in TOP50_COINBASE if c not in COIN_PAGES]
 COINBASE_EXTRA_START = "2025-06-01"
 HL_FUNDING_START = "2023-05-01"
 # Hyperliquid perps: every coin-page coin (not just CEX_ASSETS). Funding history for the non-majors from here
@@ -177,4 +228,46 @@ HL_SPOT = {"HYPE": "@107"}          # HYPE/USDC, Hyperliquid's main HYPE spot ma
 # so spot CVD is blank for those candles)
 SPOT_FALLBACK = {"HYPE": ("hyperliquid", "Hyperliquid spot HYPE/USDC before Binance spot listed it (2026-09-24)")}
 # sources that need a non-US connection; scripts/ops/run_update.sh runs them inside the VPN step
-VPN_SOURCES = ["binance", "bybit", "binance_funding"]
+VPN_SOURCES = ["binance", "bybit", "binance_funding", "oi5m"]
+
+
+# ----------------------------------------------------------------------------- Auto top-50 discovery (mdh/sources/universe.py)
+# Coins that enter the CoinGecko top 50 later are found by the hourly `universe` source and recorded in
+# data/state/universe.json; apply_universe() adds them to the lists above (in place, so sources later in the
+# same run see them). At most UNIVERSE_MAX_ADDS_PER_DAY new coins per UTC day, so their backfills stay small.
+UNIVERSE_FILE = STATE_DIR / "universe.json"
+UNIVERSE_MAX_ADDS_PER_DAY = 3
+
+
+def apply_universe(u=None):
+    import json as _json
+    if u is None:
+        try:
+            u = _json.loads(UNIVERSE_FILE.read_text())
+        except (FileNotFoundError, ValueError):
+            return
+    for c, v in sorted(u.get("added", {}).items()):
+        if c not in BINANCE_UNIVERSE:
+            BINANCE_UNIVERSE.append(c)
+        perp = v.get("perp")
+        if perp:
+            NO_PERP.discard(c)
+            if perp[1] != 1:
+                PERP_SYMBOL[c] = (perp[0], perp[1])
+            elif f"{c}USDT" not in BINANCE_SYMBOLS:          # the VPN parser only knows plain and a few 1000x perps
+                BINANCE_SYMBOLS.append(f"{c}USDT")
+                BINANCE_START_OVERRIDES[f"{c}USDT"] = v["added_on"]
+            if c not in BINANCE_FUNDING_ASSETS:
+                BINANCE_FUNDING_ASSETS.append(c)
+        else:
+            NO_PERP.add(c)
+        if v.get("coinbase") and c not in COINBASE_EXTRA:
+            COINBASE_EXTRA.append(c)
+        if v.get("hl"):
+            if c not in TOP50_HL:
+                TOP50_HL.append(c)
+            if v["hl"] != c:
+                HL_SYMBOL[c] = v["hl"]
+
+
+apply_universe()
