@@ -56,6 +56,10 @@ fi
 "$PY" scripts/ops/fetch_mrluanluan.py 2>&1 | while read -r line; do log "$line"; done
 # Deribit BTC option trades (history.deribit.com, public): daily call/put taker premium by bucket, catch-up of closed UTC days (backfill since 2019 done 2026-10-17)
 "$PY" scripts/ops/fetch_deribit_opt_trades.py 2>&1 | while read -r line; do log "$line"; done
+# Coinbase taker-flow history backfill (backfill_cb_trades.py, own launchd job) -> merge finished days into cb_taker_15m (added 2026-10-30)
+"$PY" scripts/ops/merge_cb_backfill.py 2>&1 | while read -r line; do log "$line"; done
+# Binance USDT-M perp order-book depth history (data.binance.vision bookDepth, +-0.2..5%, 5-min rows) -> data/bookdepth/ (added 2026-10-30; initial backfill ~120 days/run)
+"$PY" scripts/ops/fetch_bn_bookdepth.py --max-days 120 --seconds 600 2>&1 | while read -r line; do log "$line"; done
 # data completeness check (Avalon 10/23: any missing hour must be investigated): prints GAP lines, writes data/state/gaps.json
 "$PY" scripts/ops/check_gaps.py 2>&1 | while read -r line; do log "$line"; done
 # rebuild the dashboard data file (data/dashboard/data.json); publishing it to the artifact is a separate step
@@ -80,5 +84,8 @@ if "$PY" -m mdh export >/dev/null; then log "dashboard data.json exported"; else
 # Raw on-chain table from AWS Open Data (data/chain/raw: tx/outputs/inputs per UTC day; added 2026-10-29, see claude/ats-build-research-2026-10-29.md)
 # re-pulls today+yesterday, then backfills newest-first down to MDH_CHAIN_FLOOR within MDH_CHAIN_BUDGET seconds
 "$PY" scripts/chain/aws_backfill.py 2>&1 | while read -r line; do log "$line"; done
+# Accumulation Trend Score v1 (Glassnode method, exact balances from genesis; waits until the raw backfill reaches 2009, then
+# builds index -> clusters -> flows in ~25-minute slices each hour, then keeps up daily). Output data/onchain/ats_v1_score.csv
+"$PY" scripts/chain/ats_v1.py 2>&1 | while read -r line; do log "$line"; done
 
 log "done"
