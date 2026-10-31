@@ -183,6 +183,21 @@ def main():
             if m:
                 x = f"{x}（{'低' if d < 0 else '高'}出 {abs(d):.1f}%）"
             out["alerts"].append(x)
+    # 大额 ETF 资金流 (10/31): an altcoin ETF day in the top 15% of that fund's non-zero days and >= 0.5% of its holdings
+    for a in ("SOL", "XRP", "ZEC", "SUI", "HYPE", "NEAR"):
+        e = R.get(a) or {}
+        try:
+            day = (e.get("win") or {}).get("day") or {}
+            usd, pct = day.get("usd") or 0, day.get("pct") or 0
+            nz = sorted(abs(x) for x in (e.get("series") or {}).get("usd") or [] if x)
+            if not usd or len(nz) < 8 or abs(usd) < nz[int(len(nz) * 0.85)] or abs(pct) < 0.5:
+                continue
+            if (datetime.now(timezone.utc).date() - datetime.fromisoformat(e["date"]).date()).days > 3:
+                continue
+            amt = f"{abs(usd) / 1e8:.2f} 亿" if abs(usd) >= 1e8 else f"{abs(usd) / 1e4:,.0f} 万"
+            out["alerts"].append(f"{a} ETF {int(e['date'][5:7])}/{int(e['date'][8:])} 大额{'流入' if usd > 0 else '流出'} {amt}美元（占规模 {abs(pct):.1f}%）")
+        except Exception:
+            pass
     for a in hold:
         g = (C.get(a) or {}).get("sig")
         p7 = P.live(C, a, "c7")
