@@ -84,6 +84,8 @@ if "$PY" -m mdh export >/dev/null; then log "dashboard data.json exported"; else
 # Raw on-chain table from AWS Open Data (data/chain/raw: tx/outputs/inputs per UTC day; added 2026-10-29, see claude/ats-build-research-2026-10-29.md)
 # re-pulls today+yesterday, then backfills newest-first down to MDH_CHAIN_FLOOR within MDH_CHAIN_BUDGET seconds
 "$PY" scripts/chain/aws_backfill.py 2>&1 | while read -r line; do log "$line"; done
+# Mac load after the parallel backfill (10/31: 3 workers; check this if things get slow)
+log "mac: load $(sysctl -n vm.loadavg 2>/dev/null) $(memory_pressure 2>/dev/null | tail -1)"
 # Accumulation Trend Score v1 (Glassnode method, exact balances from genesis; waits until the raw backfill reaches 2009, then
 # builds index -> clusters -> flows in ~25-minute slices each hour, then keeps up daily). Output data/onchain/ats_v1_score.csv
 "$PY" scripts/chain/ats_v1.py 2>&1 | while read -r line; do log "$line"; done
