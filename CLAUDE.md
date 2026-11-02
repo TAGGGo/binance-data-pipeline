@@ -23,3 +23,13 @@ Everything runs from the repo root with `.venv/bin/python` (or `python3`). Overv
 - New research script: docstring at top stating question, data, and date; write results to `data/outputs/`, not the repo root.
 - Secrets live in `.env` (gitignored); never print or commit them.
 - Binance/Bybit need a non-US route; the hourly job handles this with `MDH_VPN_MODE` (see `scripts/run_update.sh`).
+
+## On-chain entity clustering: check against data/reference/x_charts (Avalon 2026-11-01)
+- We don't subscribe to Glassnode. M大 (@Murphychen888, incl. subscriber posts) and 貝格先生 (@market_beggar) often post
+  Glassnode charts (many entity-adjusted). They are archived in `data/reference/x_charts/` (images, post lists, README) with
+  numbers read from them in `values.csv` (text = exact, chart = ~2%, colour charts = periods only).
+- Whenever the entity clustering / entity-adjusted metrics (ATS, STH/LTH entity supply, STH-URPD, exchange balances, whales)
+  produce results, COMPARE them with these references before calling them accurate: draw ours for the same date/range and
+  put it next to theirs; log the differences. Validation targets already noted there: Glassnode ATS colour periods
+  (yellow 2025-08..10, 2025-12..2026-01, 2026-02..05; purple 2026-06..08) and M大's 10/31 STH-URPD (entity-adjusted).
+- This is only needed until our clustering is accurate; after that the archive is just history.
