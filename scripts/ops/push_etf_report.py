@@ -3,11 +3,13 @@ Push the daily market report (spot ETF flows + market, funding, derivatives, mac
 signals) to WeChat through PushPlus (https://www.pushplus.plus).
 
 Runs on the Mac from scripts/ops/run_update.sh after `mdh export`; reads data/dashboard/data.json.
-Two versions, one message per new US ETF session (data/state/pushplus_last.txt):
+One message per reader-local day, every day (data/state/pushplus_day*.txt). The ETF section is included only when
+there is a US ETF session not yet reported (data/state/pushplus_last*.txt); weekends / US holidays / a late
+BlackRock print just leave it out (that session then goes into the next day's report). Two versions:
   * AI version: the Claude scheduled task "微信日报 AI 点评" reads `--facts`, writes a short commentary to a file and
     runs `--ai-note <file>`; the commentary replaces the rule-based "今日要点" card.
-  * Rule-based fallback: the hourly run sends the plain version only if the AI version hasn't gone out by
-    PUSHPLUS_FALLBACK_UTC_HOUR (default 3 = 11:00 Beijing) the day after the session.
+  * Rule-based fallback: the hourly run sends the plain version only if the AI version hasn't gone out today by
+    PUSHPLUS_FALLBACK_UTC_HOUR UTC (default 3 = 11:00 Beijing; .env sets 6 = 14:00 Beijing).
 Flags: --facts (JSON for the AI), --status, --ai-note FILE, --dry-run [--ai-note FILE], --force.
 
 .env
@@ -15,7 +17,7 @@ Flags: --facts (JSON for the AI), --status, --ai-note FILE, --dry-run [--ai-note
   PUSHPLUS_TO      optional friend token(s), comma separated, to send to instead of yourself
   PUSHPLUS_READER_TOKEN  optional: the reader's OWN user token (dad's). Messages are sent with it, so they land in the
                    reader's WeChat; his account must be real-name verified (error 905 otherwise). Beijing time.
-  PUSHPLUS_ASSETS  optional ETF assets, default "ETH,BTC,SOL,XRP,ZEC,NEAR,HYPE"
+  PUSHPLUS_ASSETS  optional ETF assets, default "ETH,BTC,SOL,XRP,ZEC,NEAR,SUI,HYPE"
 
 One HTML page (PushPlus "html" template, <= 20,000 characters), light colors fixed on every block so WeChat's
 dark mode stays readable; no images, so nothing has to be hosted.
@@ -47,6 +49,7 @@ _TO = os.environ.get("PUSHPLUS_TO", "").strip() or _READER
 _ME = "--to-me" in sys.argv
 STATE = REPO / "data" / "state" / ("pushplus_last.txt" if not _TO else
                                    "pushplus_last_" + hashlib.sha1(_TO.encode()).hexdigest()[:8] + ".txt")
+DAY = STATE.with_name(STATE.name.replace("pushplus_last", "pushplus_day"))   # reader-local date of the last send
 PREVIEW = REPO / "data" / "state" / "push_preview.html"
 XRP_RANGE = (1.25, 1.70)            # Avalon's range levels
 XRP_BTC_LEVELS = (1696, 1795)       # sats: invalidate below, confirm above
@@ -312,7 +315,7 @@ def s_etf(R, assets):
             mv = ("<div class=\"p\">分基金：" + "　".join(f'<span class="{cl(f["coins"])}">{f["zh"]} {sn(f["coins"], d)}</span>' for f in adds + cuts) + "</div>") if adds or cuts else ""
             detail.append(f'<div class="c"><h3>{a} 现货 ETF · {r["date"]}</h3><div class="p">{r["text"]["zh"]}</div><table>{bars}</table>{mv}</div>')
     head = (f'<div class="c"><h3>美国现货 ETF<br><span class="m">纽约 {md(R_DATE[0])} 交易日 · 单位：枚</span></h3>'
-            + "".join(rows) + '<div class="m">绿 = 净流入（买入），红 = 净流出。日期不同的行标注了自己的日期（ZEC 来自灰度官方文件、NEAR、HYPE 来自发行商官网，通常晚一个交易日；NEAR ETF 于 9/29 上市，HYPE 合计从 9/30 起有 Bitwise 数据）。万 = 10⁴，亿 = 10⁸。</div></div>')
+            + "".join(rows) + '<div class="m">绿 = 净流入（买入），红 = 净流出。日期不同的行标注了自己的日期（ZEC 来自灰度官方文件、NEAR、SUI、HYPE 来自发行商官网，通常晚一个交易日；SUI 合计含灰度 GSUI、Canary SUIS、21Shares TSUI；NEAR ETF 于 9/29 上市，HYPE 合计从 9/30 起有 Bitwise 数据）。万 = 10⁴，亿 = 10⁸。</div></div>')
     return head + "".join(detail)
 
 
@@ -503,21 +506,22 @@ def s_sectors(D):
 
 def s_zec(D, R):
     r = R.get("ZEC")
-    if not r or r.get("error"):
-        return ""
-    w = r["win"]; s = r["series"]
-    zeros = 0
-    for c in reversed(s["coins"]):
-        if abs(c or 0) > 1e-9:
-            break
-        zeros += 1
+    has = bool(r) and not r.get("error")
+    etfp = ""
+    if has:
+        w = r["win"]; s = r["series"]
+        zeros = 0
+        for c in reversed(s["coins"]):
+            if abs(c or 0) > 1e-9:
+                break
+            zeros += 1
+        etfp = (f'<div class="p">灰度 ZCSH（纽约 {md(r["date"])} 交易日）：当日 {cspan(w["day"]["coins"], 0)} 枚，近 7 个交易日 {cspan(w["d7"]["coins"], 0)} 枚，总持仓 {cn(r["hold"], 0, False)} 枚'
+                + (f'，<b>已连续 {zeros} 个交易日零流入</b>' if zeros >= 2 else "") + '</div>')
     C = D.get("coins") or {}
     priv = " · ".join(f'{a} {span(live(C, a, "c7"), 1, "%")}' for a in ("ZEC", "DASH", "ZEN") if a in C)
     sig = ((C.get("ZEC") or {}).get("sig") or {}).get("values") or {}
     prem = sig.get("cb_prem_24h_bp") if ok(sig.get("cb_prem_24h_bp")) else sig.get("cb_prem_bp")
-    return ('<div class="c"><h3>ZEC 专项</h3>'
-            f'<div class="p">灰度 ZCSH（纽约 {md(r["date"])} 交易日）：当日 {cspan(w["day"]["coins"], 0)} 枚，近 7 个交易日 {cspan(w["d7"]["coins"], 0)} 枚，总持仓 {cn(r["hold"], 0, False)} 枚'
-            + (f'，<b>已连续 {zeros} 个交易日零流入</b>' if zeros >= 2 else "") + '</div>'
+    return ('<div class="c"><h3>ZEC 专项</h3>' + etfp +
             f'<div class="p">隐私板块 7 天：{priv}</div>'
             f'<div class="p">美国买盘（Coinbase 溢价，近 24 小时）：{span(prem, 1, " bp") if ok(prem) else "数据积累中"}</div>'
             '<div class="m">9 月 ZEC 上涨的三个发动机：ETF 新钱、美国现货买盘、隐私板块联动。三者重新转强，才更可能再创新高。</div></div>')
@@ -598,7 +602,7 @@ def summary(D, R, fg, fgl, alerts, events):
     return '<div class="c sum"><h3>今日要点</h3>' + "".join(f"<div>{p}</div>" for p in parts) + "</div>"
 
 
-def facts(D) -> dict:
+def facts(D, etf_on=True) -> dict:
     """Compact numbers for the AI commentary (read by the Claude scheduled task via --facts)."""
     R = D.get("etf_report") or {}
     C = D.get("coins") or {}
@@ -609,7 +613,11 @@ def facts(D) -> dict:
            "price_note": "everything is live as of live_prices_as_of_local: live_* = rolling 24h/7d; RSI/SMA/alerts/rebound signals include today's forming daily candle. chg_since_utc0 = change since today's UTC 00:00 candle open", "timing_note":
            "Report is dated in the reader's local time (reader_timezone). ETF dates are New York trading days; macro dates are US dates. "
            "Say 'ETF 纽约 9/28 交易日' style, avoid ambiguous words like 昨天/今天 for data dates.", "etf": {}, "holdings": {}, "alerts": [], "sectors_7d": {}, "macro": {}, "events": []}
-    for a in ("BTC", "ETH", "SOL", "XRP", "ZEC", "NEAR", "HYPE"):
+    out["etf_in_report"] = etf_on
+    if not etf_on:
+        out["etf_note"] = ("No new US ETF session in today's report (weekend / US holiday / data not published yet). "
+                           "Do NOT write about ETF flows today; the session will be covered in the next report.")
+    for a in (("BTC", "ETH", "SOL", "XRP", "ZEC", "NEAR", "SUI", "HYPE") if etf_on else ()):
         r = R.get(a)
         if r and not r.get("error"):
             w = r["win"]
@@ -667,10 +675,15 @@ def s_x(xnote: str) -> str:
             + '<div class="m">博主观点由 Claude 从 X 摘要，只代表博主本人；紫色框是 Claude 用数据核对后的补充。时间为北京时间。</div></div>')
 
 
-def build(D, assets, note=None, xnote=None):
+def etf_date(D) -> str:
     R = D.get("etf_report") or {}
     main = next((R[a] for a in ("ETH", "BTC") if a in R and not R[a].get("error")), None)
-    date = main["date"] if main else D["generated_at"][:10]
+    return main["date"] if main else ""
+
+
+def build(D, assets, note=None, xnote=None, etf_on=True):
+    R = (D.get("etf_report") or {}) if etf_on else {}
+    date = etf_date(D) or D["generated_at"][:10]
     R_DATE[0] = date
     PX_ASOF[0] = px_asof()
     load_live(live_syms())
@@ -678,13 +691,14 @@ def build(D, assets, note=None, xnote=None):
     hold, alert, alerts = s_holdings(D)
     fundsec, fg, fgl = s_funds_lite(D)
     cal, events = calendar(D)
-    etf = s_etf(R, assets).split('<div class="c"><h3>ETH 现货')[0].split('<div class="c"><h3>BTC 现货')[0]   # table only
+    etf = "" if not etf_on else s_etf(R, assets).split('<div class="c"><h3>ETH 现货')[0].split('<div class="c"><h3>BTC 现货')[0]   # table only
     top = (s_ai(note) if note else summary(D, R, fg, fgl, alerts, events)) + (s_x(xnote) if xnote else "")
     body = (top + alert + hold + etf + s_zec(D, R) + s_sectors(D) + s_signals_dad(D)
             + fundsec + s_macro(D) + cal)
-    title = f"市场日报 {now.month}/{now.day}｜ETF(纽约{md(date)}) " + " ".join(f'{a} {sn(R[a]["win"]["day"]["coins"], nd(a))}' for a in ("BTC", "ETH") if a in R and not R[a].get("error"))
+    title = f"市场日报 {now.month}/{now.day}" + ("｜行情" if not etf_on else f"｜ETF(纽约{md(date)}) " + " ".join(f'{a} {sn(R[a]["win"]["day"]["coins"], nd(a))}' for a in ("BTC", "ETH") if a in R and not R[a].get("error")))
+    etfl = f"美国 ETF：纽约 {md(date)} 交易日" if etf_on else "美国 ETF：今天没有新的交易日数据（周末或美国休市）"
     html = (CSS + f'<div class="r"><div class="h"><div class="e">MARKET DATA HUB</div><div class="t">每日市场日报 · {now.month}月{now.day}日</div>'
-            f'<div class="s">{LOC}时间 {now:%Y-%m-%d %H:%M} 发送<br>币价：截至{LOC} {LIVE_ASOF[0] or PX_ASOF[0]} · 美国 ETF：纽约 {md(date)} 交易日</div></div>{body}'
+            f'<div class="s">{LOC}时间 {now:%Y-%m-%d %H:%M} 发送<br>币价：截至{LOC} {LIVE_ASOF[0] or PX_ASOF[0]} · {etfl}</div></div>{body}'
             f'<div class="f">币价为币安现货实时价格（每小时更新）；日K 在 UTC 0 点（{LOC}时间 {datetime.now(timezone.utc).replace(hour=0, minute=0).astimezone(BJ):%H:%M}）换新一根。宏观数据日期为美东日期。ETF 按交易日记账，枚数 = 美元净流入 ÷ 当日纽约 16:00 价格。数据：SoSoValue、Grayscale、Binance、Coinbase、FRED、DefiLlama、alternative.me。仅供参考，不构成投资建议。</div></div>')
     return title, html, date
 
@@ -696,26 +710,37 @@ def arg(name):
 def main():
     force, dry = "--force" in sys.argv, "--dry-run" in sys.argv
     D = json.loads(DATA.read_text())
-    if "--facts" in sys.argv:
-        print(json.dumps(facts(D), ensure_ascii=False, default=str))
-        return 0
     last = STATE.read_text().strip() if STATE.exists() else ""
+    today = datetime.now(BJ).strftime("%Y-%m-%d")
+    sent_day = DAY.read_text().strip() if DAY.exists() else ""
+    edate = etf_date(D)
+    etf_on = bool(edate) and edate > last
+    if "--facts" in sys.argv:
+        print(json.dumps(facts(D, etf_on), ensure_ascii=False, default=str))
+        return 0
     note_path = arg("--ai-note")
     note = Path(note_path).read_text() if note_path else None
     xp = arg("--x-note")
     xnote = Path(xp).read_text() if xp and Path(xp).exists() else None
-    assets = [a.strip() for a in os.environ.get("PUSHPLUS_ASSETS", "ETH,BTC,SOL,XRP,ZEC,NEAR,HYPE").split(",") if a.strip()]
-    title, html, date = build(D, assets, note, xnote)
+    assets = [a.strip() for a in os.environ.get("PUSHPLUS_ASSETS", "ETH,BTC,SOL,XRP,ZEC,NEAR,SUI,HYPE").split(",") if a.strip()]
+    title, html, date = build(D, assets, note, xnote, etf_on)
     while len(html) > 19500 and len(assets) > 2:     # PushPlus body limit is 20,000 characters
         assets = assets[:-1]
-        title, html, date = build(D, assets, note, xnote)
+        title, html, date = build(D, assets, note, xnote, etf_on)
     if "--status" in sys.argv:
-        print(json.dumps({"latest_session": date, "last_sent": last, "new": date > last}))
+        # "new" = today's report hasn't gone out yet (sent daily now); etf_new = a new ETF session will be included
+        print(json.dumps({"today": today, "sent_today": sent_day == today, "new": sent_day != today,
+                          "etf_session": edate, "etf_last_sent": last, "etf_new": etf_on}))
         return 0
     if dry:
         PREVIEW.parent.mkdir(parents=True, exist_ok=True)
         PREVIEW.write_text('<meta charset="utf-8"><meta name="viewport" content="width=device-width">' + html)
         print(len(html), "chars |", title)
+        return 0
+    # 2026-10-24 Avalon: dad's daily WeChat report is stopped, replaced by the 币聊 news page (crypto-chat /news).
+    # Set PUSHPLUS_DAD_DAILY=on in .env to turn it back on. Tests to Avalon (--to-me) still work.
+    if not _ME and os.environ.get("PUSHPLUS_DAD_DAILY", "on").strip().lower() in ("off", "0", "no"):
+        print("push_etf_report: dad's daily report is paused (PUSHPLUS_DAD_DAILY=off)")
         return 0
     token = os.environ.get("PUSHPLUS_TOKEN", "").strip() if _ME else (_READER or os.environ.get("PUSHPLUS_TOKEN", "").strip())
     if _ME:
@@ -726,16 +751,16 @@ def main():
         return 0
     now = datetime.now(timezone.utc)
     if not force:
-        if date <= last:
-            print(f"push_etf_report: nothing new (latest {date}, last sent {last or 'never'})")
+        if sent_day == today:
+            print(f"push_etf_report: nothing new (already sent today {today}; ETF latest {edate}, last sent {last or 'never'})")
             return 0
         if not note:
             # plain (rule-based) version is the fallback: the Claude scheduled task sends the AI version first;
-            # if it hasn't by FALLBACK hour UTC the day after the session (default 03:00 UTC = 11:00 Beijing), send this
+            # if it hasn't by FALLBACK hour UTC on the reader's day (6 = 14:00 Beijing), send this
             fb = int(os.environ.get("PUSHPLUS_FALLBACK_UTC_HOUR", "3"))
-            earliest = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1, hours=fb)
+            earliest = datetime.strptime(today, "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(hours=fb)
             if now < earliest:
-                print(f"push_etf_report: {date} ready; waiting for the AI version until {earliest:%H:%M} UTC")
+                print(f"push_etf_report: {today} ({'ETF ' + edate if etf_on else 'no new ETF'}) waiting for the AI version until {earliest:%H:%M} UTC")
                 return 0
     body = {"token": token, "title": (title + ("" if note else "")) [:100], "content": html, "template": "html"}
     to = "" if _ME else os.environ.get("PUSHPLUS_TO", "").strip()
@@ -751,8 +776,10 @@ def main():
         return 0
     if j.get("code") == 200:
         STATE.parent.mkdir(parents=True, exist_ok=True)
-        STATE.write_text(date)
-        print(f"push_etf_report: sent {date} ({'AI' if note else 'rule-based'}, {len(html)} chars) -> {'friends' if to else 'reader' if _READER else 'self'}")
+        DAY.write_text(today)
+        if etf_on:
+            STATE.write_text(date)
+        print(f"push_etf_report: sent {today} {'ETF ' + date if etf_on else 'no ETF'} ({'AI' if note else 'rule-based'}, {len(html)} chars) -> {'friends' if to else 'reader' if _READER else 'self'}")
         return 0
     print(f"push_etf_report: failed {j}")
     return 1
