@@ -133,7 +133,10 @@ GRAYSCALE_ETFS = {"ZEC": {"ticker": "ZCSH", "product_id": "c131f37d-6f8f-4af9-86
 ISSUER_ETFS = {
     "NEAR": [{"ticker": "NRR", "issuer": "bitwise", "url": "https://nrretf.com/", "listing": "2026-09-29"}],
     "HYPE": [{"ticker": "THYP", "issuer": "21shares", "listing": "2026-05-12"},
-             {"ticker": "BHYP", "issuer": "bitwise", "url": "https://www.bhypetf.com/", "listing": "2026-05-15"}],
+             {"ticker": "BHYP", "issuer": "bitwise", "url": "https://www.bhypetf.com/", "listing": "2026-05-15"},
+             # 11-04: Grayscale HYPG (etfs.grayscale.com/hypg, ~$190M AUM) was missing, so HYPE flows were understated
+             {"ticker": "HYPG", "issuer": "grayscale", "product_id": "6381ae28-053d-4a4c-91e0-6aefc1852e7f",
+              "listing": "2026-06-03", "flow_lag": 1}],
     # SUI spot ETPs (added 2026-10-07). Leveraged 21Shares 2x SUI (swap-based) left out on purpose.
     # grayscale = the fund's daily workbook (grayscale.py; T+1 shares, so flow_lag=1), canary = fund page history table.
     "SUI": [{"ticker": "GSUI", "issuer": "grayscale", "product_id": "7acb170a-2922-453b-88d8-64337392ac02",
