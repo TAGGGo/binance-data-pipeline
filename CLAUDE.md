@@ -33,3 +33,8 @@ Everything runs from the repo root with `.venv/bin/python` (or `python3`). Overv
   put it next to theirs; log the differences. Validation targets already noted there: Glassnode ATS colour periods
   (yellow 2025-08..10, 2025-12..2026-01, 2026-02..05; purple 2026-06..08) and M大's 10/31 STH-URPD (entity-adjusted).
 - This is only needed until our clustering is accurate; after that the archive is just history.
+
+## Shared with other AI assistants (2026-11-09)
+- `AGENTS.md` is a link to this file, so Google Antigravity (Gemini) reads the same rules. Keep new rules here, not in one assistant's private memory.
+- The website (币聊 Crypto Chat, `~/Projects/crypto-chat`) has its own `AGENTS.md`; the scheduled AI tasks (news + 日报, weekly on-chain and exchange-balance checks) are documented with their full prompts in `~/Projects/crypto-chat/docs/ai/scheduled-tasks.md`.
+- Avalon's preferences: reply in Chinese, short, conclusion first; coins as BTC/ETH; changes in % only; no time-zone labels; never expose his or his dad's holdings to family.
