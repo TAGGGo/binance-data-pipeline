@@ -38,3 +38,10 @@ Everything runs from the repo root with `.venv/bin/python` (or `python3`). Overv
 - `AGENTS.md` is a link to this file, so Google Antigravity (Gemini) reads the same rules. Keep new rules here, not in one assistant's private memory.
 - The website (币聊 Crypto Chat, `~/Projects/crypto-chat`) has its own `AGENTS.md`; the scheduled AI tasks (news + 日报, weekly on-chain and exchange-balance checks) are documented with their full prompts in `~/Projects/crypto-chat/docs/ai/scheduled-tasks.md`.
 - Avalon's preferences: reply in Chinese, short, conclusion first; coins as BTC/ETH; changes in % only; no time-zone labels; never expose his or his dad's holdings to family.
+
+## The chain disk (/Volumes/chain/datahub/chain, ~280 GB, external drive)
+- Data only; the code is in this repo's `scripts/chain/` (ea2.py = entity clustering, ea2_post.py = re-apply labels, ats_*.py = accumulation score, aws_extract/aws_backfill = raw tx history).
+- `raw/` (inputs, outputs, tx): full BTC transaction history. Huge: never scan, index, copy or rewrite it; read only the specific files a script names.
+- `labels/`: exchange labels. Edit only `extra_roots.csv`, `auto_ents.csv`, `not_exch.csv` (back up first), then run ea2_post. Never re-run full ea2 or change the clustering algorithm without asking Avalon (it takes hours).
+- `ea2/`, `ea_urpd/`, `derived/`, `ats_*`, `exch_disc/`: generated outputs.
+- Long jobs run natively on the Mac via the job queue: write `data/state/jobq/<name>.job` (first line = script path, then KEY=value lines); the Mac picks it up within a minute, log in `data/logs/<name>.log`.
