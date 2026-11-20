@@ -80,7 +80,7 @@ def run(ctx, full=False):
     u = _load()
     added = u.setdefault("added", {})
     h = {"x-cg-demo-api-key": os.environ["COINGECKO_DEMO_KEY"]} if os.environ.get("COINGECKO_DEMO_KEY") else {}
-    mk = ctx.http.get_json(CG_URL, headers=h, params={"vs_currency": "usd", "order": "market_cap_desc", "per_page": 150, "page": 1})
+    mk = ctx.http.get_json(CG_URL, headers=h, params={"vs_currency": "usd", "order": "market_cap_desc", "per_page": 250, "page": 1})
     cands = [x for x in mk if not _pegged_or_wrapped(x)]
     now = _now()
     today = now.strftime("%Y-%m-%d")
@@ -93,9 +93,9 @@ def run(ctx, full=False):
     spot = set(cache["bases"])
     top_items = [x for i, x in enumerate(cands)
                  if x["symbol"].upper().isascii() and x["symbol"].upper() in spot and x["symbol"].upper() != "BTC"
-                 and ((x.get("market_cap_rank") or 999) <= 100 or i < 65)]
+                 and ((x.get("market_cap_rank") or 999) <= 150 or i < 100)]
     top = [x["symbol"].upper() for x in top_items]
-    logo_dir = settings.REPO_ROOT.parent.parent / "crypto-chat" / "public" / "static" / "logos"
+    logo_dir = settings.ROOT.parent.parent / "crypto-chat" / "public" / "static" / "logos"
     if logo_dir.is_dir():
         for x in top_items:
             sym = x["symbol"].upper()

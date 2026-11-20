@@ -122,6 +122,7 @@ TV_SYMBOLS = [
     ("BITSTAMP", "BTCUSD"),   # long BTC OHLC history (2011+) for candles and weekly moving averages
     ("FX_IDC", "USDKRW"),     # USD/KRW for the Kimchi premium
     ("KRAKEN", "XMRUSD"),     # Monero: Binance delisted it in 2024 (币聊 隐私币 sector, Avalon 10-28)
+    ("KRAKEN", "SNEKUSD"),    # Snek (Cardano meme coin, listed on Kraken, Avalon 2026-11-20)
 ]
 TV_INTERVALS = ["1d", "1h"]   # daily = full history; hourly = rolling ~2 months, accumulated going forward
 
