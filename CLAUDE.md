@@ -10,11 +10,13 @@ Everything runs from the repo root with `.venv/bin/python` (or `python3`). Overv
 
 ## Layout
 - `mdh/` package: `sources/` one module per provider (register in `sources/__init__.py`), `core/` http + db, `derived/views.sql`, `dashboard/` JSON export + page.html, `settings.py` what to collect.
+  - `mdh/sources/universe.py` (updated 2026-11-20): hourly auto-discovery of CoinGecko/CMC Top 100 coins (`market_cap_rank <= 100` or top 65 non-stable/non-wrapped/non-gold-pegged coins on Binance Spot, excluding `PAXG`/`XAUT`/stablecoins/wrapped/tokenized treasury funds). Auto-adds up to 3 new coins/day into `universe_coins`, triggers full history + derivatives collection, and auto-downloads missing PNG logos into `~/Projects/crypto-chat/public/static/logos/{SYM}.png`.
 - `scripts/ops/` the hourly pipeline: `run_update.sh` (entry, run by launchd), `install_scheduler.sh`, `fetch_bgeometrics.py`, `push_etf_report.py`, `render_etf_report.cjs`. If you move these, re-run `scripts/ops/install_scheduler.sh`.
 - `scripts/research/` backtests and one-off analyses (`backtest_*`, `alt_index_vs_btc`). New analyses go here.
 - `scripts/tools/` manual utilities: `probe_apis.py` (source health), `verify_candles.py`, `load_xrpl_backfill.py` (loads into the DB when run; ignores --help).
 - All scripts run from the repo root and locate it via `Path(__file__).parents[2]`.
 - `data/` gitignored. `data/outputs/` finished charts/reports, `data/scratch/` throwaway dumps, `data/logs/`, `data/state/`.
+- Intermediate/scratch debug scripts left on disk (`charts/`, `scripts/std/retired/`, `scripts/ops/{pip_install,sysload,sysload2,spawn_ats2}.py`, `scripts/chain/{ats_v0_*,ats_diag,ats_kit2,ats_lab2,cb_*,coinbase_find,ea_chain,ea_reset,pool_all,por_check}.py`) are intentionally kept locally and listed in `.gitignore` (2026-11-20).
 - `seeds/` tracked one-time history. `tests/` run with `python3 -m unittest discover tests`.
 - `market_data_parser.py` is the legacy Binance CLI (still works; 4 live-parser tests currently fail, a mock of `requests` is stale).
 
