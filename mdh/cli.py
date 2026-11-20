@@ -83,6 +83,7 @@ def cmd_run(names: list[str], full: bool) -> int:
 STATUS_TABLES = [
     ("binance_1h", "timestamp", "symbol"),
     ("fred_series", "date", "series_id"),
+    ("treasury_tga_daily", "date", None),
     ("equity_daily", "date", "ticker"),
     ("tv_bars", "ts", "symbol || ' ' || interval"),
     ("stablecoin_supply", "date", "stablecoin"),
@@ -93,6 +94,7 @@ STATUS_TABLES = [
     ("deribit_opt_summary", "ts", "currency"),
     ("cb_taker_15m", "ts", "symbol"),
     ("fear_greed", "date", None),
+    ("cnn_fear_greed", "date", None),
     ("vix_daily", "date", None),
     ("cg_global_snapshot", "ts", None),
 ]

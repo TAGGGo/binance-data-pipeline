@@ -112,4 +112,13 @@ def run(ctx, full=False):
                             "net_inflow_usd": fl["net_inflow_usd"].round(2), "value_traded_usd": np.nan,
                             "net_assets_usd": fl["aum_usd"], "cum_net_inflow_usd": fl["cum_net_inflow_usd"].round(2)})
         n_flow += db.upsert(ctx.con, "etf_flows_daily", out, ["date", "asset", "source"])
+    # Grayscale funds that are one of several issuers for an asset (settings.ISSUER_ETFS, e.g. SUI = GSUI):
+    # store the daily rows only; etf_issuers.py turns them into flows (flow_lag=1) and the asset total.
+    for asset, fs in settings.ISSUER_ETFS.items():
+        for f in fs:
+            if f["issuer"] != "grayscale":
+                continue
+            daily = daily_frame(ctx.http.get(URL.format(pid=f["product_id"])).content)
+            n_fund += db.upsert(ctx.con, "etf_fund_daily", daily.assign(ticker=f["ticker"], asset=asset, source="grayscale"),
+                                ["ticker", "date"])
     return {"etf_fund_daily": n_fund, "etf_flows_daily": n_flow}

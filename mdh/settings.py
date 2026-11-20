@@ -42,6 +42,7 @@ HOST_RPM = {
     "api.alternative.me": 20,
     "data-api.binance.vision": 600,        # weight 6000/min
     "fapi.binance.com": 120,               # fundingRate shares 500 / 5 min / IP; the rest is weight 2400/min
+    "www.binance.com": 120,                # same fapi/futures/dapi/eapi endpoints without US geo-block
     "data.binance.vision": 1200,           # static archive
     "cdn.cboe.com": 20,
     "api.exchange.coinbase.com": 300,      # public: 10 req/s

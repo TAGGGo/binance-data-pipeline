@@ -60,6 +60,8 @@ fi
 "$PY" scripts/ops/merge_cb_backfill.py 2>&1 | while read -r line; do log "$line"; done
 # Binance USDT-M perp order-book depth history (data.binance.vision bookDepth, +-0.2..5%, 5-min rows) -> data/bookdepth/ (added 2026-10-30; initial backfill ~120 days/run)
 "$PY" scripts/ops/fetch_bn_bookdepth.py --max-days 120 --seconds 600 2>&1 | while read -r line; do log "$line"; done
+# Survivorship-free universe: all Binance USDT spot pairs incl. delisted, daily (once per UTC day; renames/merges spliced) -> data/universe/ (added 2026-11-06, claude/universe-pit.md)
+"$PY" scripts/ops/fetch_universe.py --seconds 600 2>&1 | while read -r line; do log "$line"; done
 # data completeness check (Avalon 10/23: any missing hour must be investigated): prints GAP lines, writes data/state/gaps.json
 "$PY" scripts/ops/check_gaps.py 2>&1 | while read -r line; do log "$line"; done
 # rebuild the dashboard data file (data/dashboard/data.json); publishing it to the artifact is a separate step
@@ -80,14 +82,52 @@ if "$PY" -m mdh export >/dev/null; then log "dashboard data.json exported"; else
 "$PY" scripts/onchain/node_conc.py 2>&1 | while read -r line; do log "$line"; done
 # Supply-quantile cost basis (Murphy 分位成本线) q50..q75 -> data/onchain/cost_quantiles_daily.csv (added 2026-10-27)
 "$PY" scripts/onchain/node_quantiles.py 2>&1 | while read -r line; do log "$line"; done
+# Self-computed URPD metrics (realized price, MVRV, PSIP, seller exhaustion) -> data/onchain/self/ (added 2026-10-31; replaces BGeometrics for these)
+"$PY" scripts/onchain/self_urpd_metrics.py 2>&1 | while read -r line; do log "$line"; done
+# US / Europe / Asia session curves (貝格 美方資金情緒曲線 + 笨蛋錢指標), added 2026-11-01
+"$PY" scripts/region_sessions.py 2>&1 | while read -r line; do log "$line"; done
+# CBD heatmap data for the board (once per new URPD day), added 2026-11-01
+"$PY" scripts/onchain/cbd_heatmap.py 2>&1 | while read -r line; do log "$line"; done
 
 # Raw on-chain table from AWS Open Data (data/chain/raw: tx/outputs/inputs per UTC day; added 2026-10-29, see claude/ats-build-research-2026-10-29.md)
 # re-pulls today+yesterday, then backfills newest-first down to MDH_CHAIN_FLOOR within MDH_CHAIN_BUDGET seconds
 "$PY" scripts/chain/aws_backfill.py 2>&1 | while read -r line; do log "$line"; done
+# Heavy on-chain jobs (STH, Puell, spend link -> CDD/TMM/LTH-SOPR/HODL, exchange/miner balances) run DETACHED, one at a time
+# (scripts/ops/heavy_jobs.sh, log data/logs/heavy.log; added 2026-10-31)
+"$PY" scripts/ops/spawn_heavy.py 2>&1 | while read -r line; do log "$line"; done
 # Mac load after the parallel backfill (10/31: 3 workers; check this if things get slow)
 log "mac: load $(sysctl -n vm.loadavg 2>/dev/null) $(memory_pressure 2>/dev/null | tail -1)"
 # Accumulation Trend Score v1 (Glassnode method, exact balances from genesis; waits until the raw backfill reaches 2009, then
 # builds index -> clusters -> flows in ~25-minute slices each hour, then keeps up daily). Output data/onchain/ats_v1_score.csv
-"$PY" scripts/chain/ats_v1.py 2>&1 | while read -r line; do log "$line"; done
+# 11-01 (Avalon: 加速): runs detached with a long budget (log data/logs/ats_v1.log); ats_v1.py holds a lock, so an
+# hourly start while the previous run is still going exits at once.
+"$PY" scripts/ops/spawn_ats.py 2>&1 | while read -r line; do log "$line"; done
+# entity layer for the board: ea2.py (label-free replay, incremental) -> ea2_post.py (labels applied, writes ea_cards.json etc.), 2026-11-03
+"$PY" scripts/ops/spawn_job.py ea2 EA_BUDGET 2>&1 | while read -r line; do log "$line"; done
+EXCH_SCAN_APPLY=1 "$PY" scripts/ops/spawn_job.py exch_scan EXCH_SCAN_BUDGET 2>&1 | while read -r line; do log "$line"; done   # 11-03 exchange wallet scanner, auto-apply on (Avalon: 交易所新地址自动加)
+# ATS v2 (30-day per-entity net, more exchange labels), 2026-11-01
+# ats_v2 paused 11-01 08:00 UTC: methods are tested on the fast kit (ats_kit/ats_lab) first; restart: queue data/state/jobq/ats_v2.job
+# ATS fast-test kit + variant lab (graded against 貝格's chart), 2026-11-01
+"$PY" scripts/ops/spawn_job.py ats_kit ATS_KIT_BUDGET 2>&1 | while read -r line; do log "$line"; done
+# minute-level Mac job queue (data/state/jobq/*.job, scripts/ops/jobq.sh via /bin/bash for disk access), 2026-11-01
+JQ="$HOME/Library/LaunchAgents/com.market-data-hub.jobq.plist"
+if [[ ! -f "$JQ" ]]; then
+  cat > "$JQ" <<PL
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.market-data-hub.jobq</string>
+  <key>ProgramArguments</key><array><string>/bin/bash</string><string>$REPO/scripts/ops/jobq.sh</string></array>
+  <key>WorkingDirectory</key><string>$REPO</string>
+  <key>StartInterval</key><integer>60</integer>
+  <key>StandardOutPath</key><string>$REPO/data/logs/jobq.log</string>
+  <key>StandardErrorPath</key><string>$REPO/data/logs/jobq.log</string>
+</dict></plist>
+PL
+  launchctl bootstrap "gui/$(id -u)" "$JQ" 2>&1 | while read -r line; do log "jobq install: $line"; done
+  log "jobq: installed com.market-data-hub.jobq (every 60 s)"
+fi
+# entity layer: exchange discovery (deposit / internal wallets) + scorecard, claude/entity-plan.md, 2026-11-01
+"$PY" scripts/ops/spawn_job.py exch_discover EXCH_DISC_BUDGET 2>&1 | while read -r line; do log "$line"; done
 
 log "done"

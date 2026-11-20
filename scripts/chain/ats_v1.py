@@ -37,6 +37,12 @@ REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 GENESIS = dt.date.fromisoformat(os.environ.get('ATS_V1_START', '2009-01-03'));  # override only for tests
 MIN_SATS = int(float(os.environ.get('ATS_V1_MIN_BTC', 0.1)) * 1e8); NB = 16
 SF = f'{O}/state.json'
+import fcntl   # one run at a time (11-01: a long detached run + the hourly call must not both write state/bal)
+_LK = open(f'{O}/run.lock', 'w')
+try:
+    fcntl.flock(_LK, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    print('ats_v1: another run is going; skip'); sys.exit(0)
 st = json.load(open(SF)) if os.path.exists(SF) else {'stage': 'wait'}
 def save(): json.dump(st, open(SF + '.tmp', 'w')); os.replace(SF + '.tmp', SF)
 def left(): return BUDGET - (time.time() - T0)
@@ -180,13 +186,30 @@ def flows():
     bal = np.load(bf) if os.path.exists(bf) else np.zeros(N, np.float64)
     if not os.path.exists(out):
         open(out, 'w').write('d,n_ent,buy_L,buyclip_L,sell_L,buy_M,buyclip_M,sell_M,supply_tracked\n')
-    c = con(); d, E = days_from('flows_done', GENESIS); rows = []
-    while d <= E and left() > 60:
-        ds = d.isoformat()
+    d, E = days_from('flows_done', GENESIS); rows = []
+    # 11-01: read the next days' parquet files in background threads while this day is being processed
+    from concurrent.futures import ThreadPoolExecutor
+    def read_day(ds):
         if not os.path.exists(f'{R}/inputs/date={ds}.parquet'):
+            return None
+        cc = duckdb.connect(); cc.execute('set threads=2')
+        try:
+            o_ = cc.execute(f"select addr, sats from '{R}/outputs/date={ds}.parquet' where addr<>0").fetchnumpy()
+            i_ = cc.execute(f"select addr, sats from '{R}/inputs/date={ds}.parquet' where addr<>0").fetchnumpy()
+        finally:
+            cc.close()
+        return o_, i_
+    pool = ThreadPoolExecutor(3); q = {}
+    while d <= E and left() > 60:
+        for k_ in range(4):
+            x_ = d + dt.timedelta(days=k_)
+            if x_ <= E and x_.isoformat() not in q:
+                q[x_.isoformat()] = pool.submit(read_day, x_.isoformat())
+        ds = d.isoformat()
+        got = q.pop(ds).result()
+        if got is None:
             st['flows_done'] = ds; d += dt.timedelta(days=1); continue
-        o = c.execute(f"select addr, sats from '{R}/outputs/date={ds}.parquet' where addr<>0").fetchnumpy()
-        i = c.execute(f"select addr, sats from '{R}/inputs/date={ds}.parquet' where addr<>0").fetchnumpy()
+        o, i = got
         a = np.concatenate([o['addr'], i['addr']]); v = np.concatenate([o['sats'], -i['sats']]).astype(np.float64) / 1e8
         k = ids(a); m = k >= 0
         if m.any():
@@ -239,4 +262,7 @@ if st['stage'] == 'flows':
     st.update(stage='live'); save(); score()
 
 if st['stage'] == 'live':   # keep up with new days
+    end_s = last_settled().isoformat()
+    if st.get('cluster_done') == end_s and st.get('flows_done') == end_s and os.path.exists(f'{O}/score.csv'):
+        log(f'up to date ({end_s})'); sys.exit(0)
     if cluster() and flows(): score()

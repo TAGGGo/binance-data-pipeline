@@ -75,6 +75,28 @@ def build(con) -> dict:
                     "dxy", "spx", "vix", "netliq_t", "fg", "mvrv"],
                    {"btc": 1, "eth": 2, "total_b": 1, "total3_b": 1, "btc_d": 2, "btc_d_ex": 2, "stables_b": 1,
                     "us10y": 3, "us2y": 3, "dxy": 3, "spx": 1, "vix": 2, "netliq_t": 3, "mvrv": 3})
+    # ------------------------------------------------------------ US stocks (added 2026-10-17)
+    # CNN Fear & Greed = US STOCK sentiment (the `fg` column above is alternative.me CRYPTO F&G).
+    us = {}
+    if db.table_exists(con, "cnn_fear_greed"):
+        us["cnn_fg"] = q(con, """SELECT date, score, rating, spx, spx_ma125, net_new_highs_pct, mcclellan_vol_sum,
+                                        put_call_5d, vix, vix_ma50, junk_spread, stock_bond_20d
+                                 FROM cnn_fear_greed ORDER BY date""",
+                         ["date", "score", "rating", "spx", "spx_ma125", "nnh_pct", "mcclellan", "pc5d", "vix",
+                          "vix50", "junk", "stock_bond"],
+                         {"score": 1, "spx": 2, "spx_ma125": 2, "nnh_pct": 2, "mcclellan": 1, "pc5d": 3,
+                          "vix": 2, "vix50": 2, "junk": 3, "stock_bond": 2})
+    if db.table_exists(con, "cnn_fg_components"):
+        us["cnn_components"] = q(con, """SELECT date, component, score, rating, prev_close, prev_1w, prev_1m, prev_1y
+                                         FROM cnn_fg_components
+                                         WHERE date = (SELECT max(date) FROM cnn_fg_components) ORDER BY component""",
+                                 ["date", "component", "score", "rating", "prev_close", "prev_1w", "prev_1m", "prev_1y"],
+                                 {"score": 1, "prev_close": 1, "prev_1w": 1, "prev_1m": 1, "prev_1y": 1})
+    if db.table_exists(con, "equity_daily"):
+        us["equity"] = q(con, """SELECT date, ticker, close FROM equity_daily
+                                 WHERE date >= DATE '2024-01-01' ORDER BY ticker, date""",
+                         ["date", "ticker", "close"], {"close": 2})
+    d["us"] = us
     # BTC daily candles (Bitstamp via TradingView, 2013+) for the main price chart and its moving averages
     d["btc_ohlc"] = q(con, """SELECT CAST(ts AS DATE), open, high, low, close FROM tv_bars
                               WHERE symbol='BITSTAMP:BTCUSD' AND interval='1d' ORDER BY ts""",
@@ -197,11 +219,87 @@ def since(con) -> dict | None:
     return out
 
 
+def top50(con) -> dict | None:
+    """"Top 50" tab: every coin with Binance data (BTC + settings.BINANCE_UNIVERSE = the top-50 list + coin pages).
+    Rolling moves from the latest hourly spot close (same as an exchange app), vs BTC in percentage points, distance
+    from the 30-day high and from the 50-day average of closed daily closes, perp OI change (coins, so price moves
+    don't count) and the 3-day average funding in bp per 8h."""
+    import pandas as pd
+    if not db.table_exists(con, "bn_kline_1h"):
+        return None
+    coins = list(dict.fromkeys(["BTC"] + settings.BINANCE_UNIVERSE))
+    ph = ",".join("?" * len(coins))
+    k = con.execute(f"""SELECT symbol, ts, high, close, quote_volume FROM bn_kline_1h WHERE market = 'spot' AND symbol IN ({ph})
+                        AND ts >= (SELECT max(ts) FROM bn_kline_1h WHERE market = 'spot') - INTERVAL 31 DAY ORDER BY ts""", coins).df()
+    if k.empty:
+        return None
+    dly = con.execute(f"""SELECT symbol, ts, close FROM bn_kline_1d WHERE market = 'spot' AND symbol IN ({ph})
+                          AND ts >= current_date - 75 AND ts < current_date ORDER BY ts""", coins).df()
+    last_ts = pd.Timestamp(k.ts.max())
+    # perp OI: live hourly (VPN step, binance_1h) first, else the archive (bn_metrics_1h_hist, lags a day)
+    oi_live = oi_hist = pd.DataFrame(columns=["symbol", "ts", "oi"])
+    if db.table_exists(con, "binance_1h"):
+        oi_live = con.execute("""SELECT replace(replace(symbol, '1000', ''), 'USDT', '') AS symbol, "timestamp" AS ts,
+                                 sum_open_interest AS oi FROM binance_1h WHERE sum_open_interest IS NOT NULL
+                                 AND "timestamp" >= current_date - 9""").df()
+    if db.table_exists(con, "bn_metrics_1h_hist"):
+        oi_hist = con.execute(f"""SELECT symbol, ts, sum_open_interest AS oi FROM bn_metrics_1h_hist WHERE symbol IN ({ph})
+                                  AND ts >= current_date - 9""", coins).df()
+    fund = {}
+    if db.table_exists(con, "deriv_funding"):
+        fund = dict(con.execute(f"""SELECT symbol, avg(funding_rate * 1e4 * 8 / coalesce(nullif(interval_hours, 0), 8))
+                                    FROM deriv_funding WHERE venue = 'binance' AND symbol IN ({ph})
+                                    AND ts >= now() - INTERVAL 3 DAY GROUP BY 1""", coins).fetchall())
+
+    def back(g, hrs):
+        x = g[g.ts <= last_ts - pd.Timedelta(hours=hrs)]
+        return float(x.close.iloc[-1]) if len(x) else None
+
+    def pct(a, b):
+        return None if a is None or b is None or b == 0 else (a / b - 1) * 100
+
+    try:   # live ranks from the universe source (data/state/universe.json), else the fixed 2026-10-07 list
+        uni = json.loads(settings.UNIVERSE_FILE.read_text())
+    except (FileNotFoundError, ValueError):
+        uni = {}
+    ranks = uni.get("rank") or {c: i + 2 for i, c in enumerate(settings.TOP50)}
+    rows = []
+    for c in coins:
+        g = k[k.symbol == c]
+        if g.empty:
+            continue
+        px = float(g.close.iloc[-1])
+        r = {"c": c, "rank": 1 if c == "BTC" else ranks.get(c),
+             "page": c in settings.COIN_PAGES, "px": px, "t": pd.Timestamp(g.ts.iloc[-1]).isoformat(),
+             "d1": pct(px, back(g, 24)), "d7": pct(px, back(g, 24 * 7)), "d30": pct(px, back(g, 24 * 30)),
+             "from_hi": pct(px, float(g[g.ts > last_ts - pd.Timedelta(days=30)].high.max())),
+             "vol24": float(g[g.ts > last_ts - pd.Timedelta(hours=24)].quote_volume.sum()) / 1e6}
+        dc = dly[dly.symbol == c].close
+        r["sma50"] = pct(px, float(dc.tail(50).mean())) if len(dc) >= 50 else None
+        for key, h in (("oi1", 24), ("oi7", 24 * 7)):
+            for src in (oi_live, oi_hist):       # each change is measured within one source (units can differ)
+                o = src[src.symbol == c].sort_values("ts")
+                if len(o):
+                    x = o[o.ts <= pd.Timestamp(o.ts.iloc[-1]) - pd.Timedelta(hours=h)]
+                    if len(x):
+                        r[key] = pct(float(o.oi.iloc[-1]), float(x.oi.iloc[-1]))
+                        break
+        r["fund"] = fund.get(c)
+        rows.append(r)
+    btc = next((r for r in rows if r["c"] == "BTC"), {})
+    for r in rows:
+        for w in ("d1", "d7", "d30"):
+            r["v" + w[1:]] = None if r[w] is None or btc.get(w) is None else r[w] - btc[w]
+    return {"as_of_utc": last_ts.isoformat(), "list_as_of": uni.get("as_of", settings.TOP50_AS_OF),
+            "rows": [{key: (_clean(v, 8) if key == "px" else _clean(v, 2) if isinstance(v, float) else v) for key, v in r.items()} for r in rows]}
+
+
 def run() -> str:
     con = db.connect(read_only=True)
     data = build(con)
     out = settings.DATA_DIR / "dashboard" / "data.json"
     data["since"] = since(con)
+    data["top50"] = top50(con)
     from mdh.dashboard import etf_report
     data["etf_report"] = etf_report.build(con)
     # coin pages: candles + indicators per coin in dashboard/coins/<SYM>.json, summary + readout in data.json

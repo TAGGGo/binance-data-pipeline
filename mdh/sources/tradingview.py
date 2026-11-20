@@ -32,10 +32,18 @@ def run(ctx, full=False):
     for interval in settings.TV_INTERVALS:
         n_bars = 5000 if full else (60 if interval == "1d" else 400)
         for exch, sym in settings.TV_SYMBOLS:
+            n_sym = n_bars
+            if not full:   # a newly added symbol gets its full history on its first run (2026-10-28)
+                try:
+                    have = ctx.con.execute(f"select count(*) from {TABLE} where symbol=? and interval=?", [f"{exch}:{sym}", interval]).fetchone()[0]
+                    if have < 100:
+                        n_sym = 5000
+                except Exception:  # noqa: BLE001 - table may not exist yet
+                    n_sym = 5000
             df = None
             for attempt in range(3):
                 try:
-                    df = tv.get_hist(symbol=sym, exchange=exch, interval=iv[interval], n_bars=n_bars)
+                    df = tv.get_hist(symbol=sym, exchange=exch, interval=iv[interval], n_bars=n_sym)
                     if df is not None and len(df):
                         break
                 except Exception as e:  # noqa: BLE001 - library raises bare exceptions

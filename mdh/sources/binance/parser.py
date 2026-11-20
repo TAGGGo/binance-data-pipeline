@@ -37,7 +37,7 @@ logger = logging.getLogger("BinanceMarketDataParser")
 # Live-API hosts. api.binance.com / fapi.binance.com return HTTP 451 for US IPs;
 # data-api.binance.vision serves the same public spot market data without the geo-block.
 SPOT_API = os.environ.get("BINANCE_SPOT_API", "https://data-api.binance.vision")
-FAPI = os.environ.get("BINANCE_FAPI", "https://fapi.binance.com")
+FAPI = os.environ.get("BINANCE_FAPI", "https://www.binance.com")
 
 
 class BinanceMarketDataParser:
@@ -244,8 +244,12 @@ class BinanceMarketDataParser:
         if main_df.empty:
             return False
         day_data = main_df[main_df['timestamp'].dt.normalize() == date_obj]
-        # Allow 2 rows tolerance for scheduled exchange maintenance windows
-        if len(day_data) < max(1, self.periods_per_day - 2):
+        # NO tolerance (Avalon 2026-10-23: "任何时候发现缺了都不允许，都要调查"). The old 2-row
+        # tolerance made a day look "complete" at 22 rows, so 22:00/23:00 UTC (3-4 PM PT) were never
+        # fetched from 2026-09-29 to 10-22. Gaps that can't be filled are reported by
+        # scripts/ops/check_gaps.py (GAP lines in update.log + data/state/gaps.json).
+        tol = 0
+        if len(day_data) < max(1, self.periods_per_day - tol):
             return False
 
         # Map data types to representative columns to verify they are populated
@@ -266,7 +270,7 @@ class BinanceMarketDataParser:
                 # Ensure the column is not mostly null.
                 # Allow same tolerance as row count (at most 2 nulls)
                 non_null_count = day_data[col].notnull().sum()
-                if non_null_count < max(1, self.periods_per_day - 2):
+                if non_null_count < max(1, self.periods_per_day - tol):
                     return False
         return True
 
@@ -324,7 +328,7 @@ class BinanceMarketDataParser:
             "interval": inv,
             "startTime": start_time_ms,
             "endTime": end_time_ms,
-            "limit": 1500
+            "limit": min(1500, self.periods_per_day + 2)   # one day; small limit = request weight 1-2 instead of 10
         }
 
         if data_type == "index_price":

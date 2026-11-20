@@ -69,7 +69,7 @@ for asset in ["BTC", "ETH"]:
         f1, f5, f20 = r["net_inflow_usd"]/1e8, r["f5"], r["f20"]
         log(f"[{asset} ETF] {idx} (target {target}): 1d={f1:+.2f}亿 | 5d={f5:+.2f}亿 | 20d(1m)={f20:+.2f}亿")
 
-st = con.execute("SELECT date::DATE as d, SUM(circulating_usd)/1e8 as tot_yi FROM stablecoin_supply GROUP BY 1 ORDER BY 1").df()
+st = con.execute("SELECT date::DATE as d, SUM(circulating_usd)/1e8 as tot_yi FROM stablecoin_supply WHERE stablecoin='ALL' GROUP BY 1 ORDER BY 1").df()
 st["d"] = st["d"].astype(str)
 st["chg30"] = st["tot_yi"] - st["tot_yi"].shift(30)
 st = st.set_index("d")

@@ -29,7 +29,7 @@ from mdh import settings
 from mdh.core import db
 
 NY = ZoneInfo("America/New_York")
-ASSETS = ["BTC", "ETH", "SOL", "XRP", "ZEC", "NEAR", "HYPE"]
+ASSETS = ["BTC", "ETH", "SOL", "XRP", "ZEC", "NEAR", "HYPE", "SUI"]
 SINGLE_FUND = {"ZEC": "ZCSH"}   # Grayscale one-fund ETP (grayscale.py); settings.ISSUER_ETFS assets are handled like it
 BTC_PER_DAY = 450.0          # 3.125 BTC x 144 blocks since the April 2024 halving
 
@@ -47,6 +47,7 @@ NAMES = {
     "BRRR": ("CoinShares", "CoinShares"), "BTCW": ("WisdomTree", "WisdomTree"), "DEFI": ("Hashdex", "Hashdex"),
     "MSBT": ("摩根士丹利", "Morgan Stanley"), "MSOL": ("摩根士丹利", "Morgan Stanley"), "MSSE": ("摩根士丹利", "Morgan Stanley"),
     "ETHB": ("贝莱德质押", "BlackRock Staked"), "NRR": ("Bitwise", "Bitwise"), "BHYP": ("Bitwise", "Bitwise"), "THYP": ("21Shares", "21Shares"), "TETH": ("21Shares", "21Shares"),
+    "GSUI": ("灰度", "Grayscale"), "SUIS": ("Canary", "Canary"), "TSUI": ("21Shares", "21Shares"),
 }
 INSTITUTE_ZH = {"BlackRock": "贝莱德", "Grayscale": "灰度", "Fidelity": "富达", "Franklin": "富兰克林", "Franklin Templeton": "富兰克林",
                 "Invesco": "景顺银河", "Invesco Galaxy": "景顺银河", "Morgan Stanley": "摩根士丹利", "ARK": "方舟", "ARK 21Shares": "方舟 21Shares",
@@ -199,7 +200,8 @@ def build_asset(con, asset: str) -> dict | None:
         "funds": funds, "fund_date": fund_date, "stats": stats,
         "issuance_days": _r(win["day"]["coins"] / BTC_PER_DAY, 1) if asset == "BTC" else None,
         "source": {"ZEC": "Grayscale ZCSH daily file", "NEAR": "Bitwise NRR site snapshots",
-                   "HYPE": "21Shares THYP history + Bitwise BHYP site snapshots"}.get(asset, "SoSoValue"),
+                   "HYPE": "21Shares THYP history + Bitwise BHYP site snapshots",
+                   "SUI": "Grayscale GSUI daily file + Canary SUIS + 21Shares TSUI histories"}.get(asset, "SoSoValue"),
     }
     rep["text"] = {"zh": text_zh(rep), "en": text_en(rep)}
     return rep

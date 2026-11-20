@@ -14,3 +14,22 @@ data/
 
 # local virtualenv
 .venv/
+
+# generated charts & retired/scratch scripts
+charts/
+scripts/std/retired/
+scripts/ops/pip_install.py
+scripts/ops/sysload.py
+scripts/ops/sysload2.py
+scripts/ops/spawn_ats2.py
+scripts/chain/ats_v0_*.py
+scripts/chain/ats_diag.py
+scripts/chain/ats_kit2.py
+scripts/chain/ats_lab2.py
+scripts/chain/cb_*.py
+scripts/chain/coinbase_find.py
+scripts/chain/ea_chain.py
+scripts/chain/ea_reset.py
+scripts/chain/pool_all.py
+scripts/chain/por_check.py
+

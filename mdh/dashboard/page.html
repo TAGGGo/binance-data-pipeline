@@ -49,6 +49,15 @@ header.bar {
 .brand { display: flex; flex-direction: column; gap: 2px; padding-bottom: 10px; }
 .brand h1 { margin: 0; font-family: var(--f-display); font-stretch: 78%; font-weight: 750; font-size: 22px; letter-spacing: .01em; text-transform: uppercase; }
 .brand .asof { font-family: var(--f-data); font-size: 11px; color: var(--ink-2); }
+.brand .asof.stale { color: var(--down); }
+.upd-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 4px; }
+.upd-btn { appearance: none; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); font: 600 12px/1 var(--f-body); padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+.upd-btn:disabled { opacity: .55; cursor: default; }
+.upd-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.upd-msg { font: 500 11px/1.35 var(--f-data); color: var(--ink-2); max-width: 46ch; }
+.upd-msg.bad { color: var(--down); }
+.livetag { display: inline-flex; align-items: center; gap: 4px; font: 500 10px/1 var(--f-data); color: var(--ink-3); letter-spacing: .04em; text-transform: none; }
+.livetag::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--up); }
 nav.tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; margin-left: auto; }
 nav.tabs button {
   appearance: none; border: 0; background: none; color: var(--ink-2); font: 600 13px/1 var(--f-body);
@@ -207,6 +216,11 @@ body.print .wrap { max-width: 1400px; padding: 24px; } body.print section.view {
     <div class="brand">
       <h1>Market Data Hub</h1>
       <span class="asof" id="asof">Loading snapshot…</span>
+      <div class="upd-row" id="upd-row" hidden>
+        <button type="button" class="upd-btn" id="upd-btn">更新数据</button>
+        <span class="upd-msg" id="upd-msg" role="status"></span>
+      </div>
+      <span class="asof" id="live-asof"></span>
     </div>
     <nav class="tabs" role="tablist" aria-label="Dashboard sections">
       <button role="tab" id="tab-overview" data-view="overview" aria-selected="true">Overview</button>
@@ -217,6 +231,7 @@ body.print .wrap { max-width: 1400px; padding: 24px; } body.print section.view {
       <button role="tab" id="tab-zec" data-view="zec" aria-selected="false">ZEC</button>
       <button role="tab" id="tab-more" data-view="more" aria-selected="false">More coins</button>
       <button role="tab" id="tab-since" data-view="since" aria-selected="false">Since 9/18</button>
+      <button role="tab" id="tab-top50" data-view="top50" aria-selected="false">Top 50</button>
       <button role="tab" id="tab-etfreport" data-view="etfreport" aria-selected="false">ETF Daily</button>
       <button role="tab" id="tab-etf" data-view="etf" aria-selected="false">ETF flows</button>
       <button role="tab" id="tab-market" data-view="market" aria-selected="false">Market &amp; macro</button>
@@ -234,6 +249,7 @@ body.print .wrap { max-width: 1400px; padding: 24px; } body.print section.view {
   <section class="view" id="view-zec" hidden></section>
   <section class="view" id="view-more" hidden></section>
   <section class="view" id="view-since" hidden></section>
+  <section class="view" id="view-top50" hidden></section>
   <section class="view" id="view-etfreport" hidden></section>
   <section class="view" id="view-etf" hidden></section>
   <section class="view" id="view-market" hidden></section>
@@ -262,7 +278,7 @@ body.print .wrap { max-width: 1400px; padding: 24px; } body.print section.view {
   const lastVal = (arr) => { const i = lastIdx(arr); return i < 0 ? null : arr[i]; };
   const valAgo = (arr, i, n) => { for (let j = i - n; j >= 0 && j >= i - n - 7; j--) if (isNum(arr[j])) return arr[j]; return null; };
   const fmt = (x, d = 2) => isNum(x) ? x.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }) : "–";
-  const fmtPx = (x) => !isNum(x) ? "–" : x >= 1000 ? "$" + fmt(x, 0) : x >= 10 ? "$" + fmt(x, 2) : "$" + fmt(x, 4);
+  const fmtPx = (x) => !isNum(x) ? "–" : x >= 1000 ? "$" + fmt(x, 0) : x >= 10 ? "$" + fmt(x, 2) : x >= 0.01 ? "$" + fmt(x, 4) : "$" + x.toPrecision(3);
   const fmtM = (m) => !isNum(m) ? "–" : (Math.abs(m) >= 1000 ? (m < 0 ? "−$" : "+$") + fmt(Math.abs(m) / 1000, 2) + "B" : (m < 0 ? "−$" : m > 0 ? "+$" : "$") + fmt(Math.abs(m), 1) + "M");
   const pct = (a, b) => (isNum(a) && isNum(b) && b !== 0) ? (a / b - 1) * 100 : null;
   const signCls = (x) => !isNum(x) ? "" : x > 0 ? "up" : x < 0 ? "down" : "";
@@ -337,7 +353,7 @@ body.print .wrap { max-width: 1400px; padding: 24px; } body.print section.view {
       const px = dd ? dd.price : (a === "BTC" ? M.btc : a === "ETH" ? M.eth : []);
       const i = lastIdx(px), last = px[i];
       const d1 = pct(last, valAgo(px, i, 1)), d7 = pct(last, valAgo(px, i, 7));
-      tiles.push(`<div class="tile"><div class="k"><span class="dot" style="background:var(${SERIES[a]})"></span>${a}</div><div class="v">${fmtPx(last)}</div><div class="d"><span class="${signCls(d1)}">${sgn(d1)} 1d</span> · <span class="${signCls(d7)}">${sgn(d7)} 7d</span></div></div>`);
+      tiles.push(`<div class="tile"><div class="k"><span class="dot" style="background:var(${SERIES[a]})"></span>${a}<span class="livetag" data-live-tag="${a}" hidden>live</span></div><div class="v" data-live-px="${a}">${fmtPx(last)}</div><div class="d"><span class="${signCls(d1)}" data-live-chg="${a}">${sgn(d1)} 1d</span> · <span class="${signCls(d7)}">${sgn(d7)} 7d</span></div></div>`);
     }
     const t = (k, val, delta) => `<div class="tile"><div class="k">${k}</div><div class="v">${val}</div><div class="d">${delta}</div></div>`;
     const i10 = lastIdx(M.us10y), y10 = M.us10y[i10], y10w = valAgo(M.us10y, i10, 7);
@@ -365,7 +381,7 @@ body.print .wrap { max-width: 1400px; padding: 24px; } body.print section.view {
     }).join("");
 
     v.innerHTML = `
-      <div><span class="eyebrow">Snapshot</span><h2>Where things stand</h2><p class="sub">Latest close for each series. Crypto prices are Binance spot; rates and equities update after the US close.</p></div>
+      <div><span class="eyebrow">Snapshot</span><h2>Where things stand</h2><p class="sub">Crypto prices with a green dot are live from Crypto.com (24h change, refreshed every 30 s); otherwise the latest Binance close in the snapshot. Rates and equities update after the US close.</p></div>
       <div class="tiles">${tiles.join("")}</div>
       <div><span class="eyebrow">Spot ETFs</span><h2>Net flows, latest session</h2></div>
       <div class="tiles">${etfTiles}</div>
@@ -986,7 +1002,7 @@ body.print .wrap { max-width: 1400px; padding: 24px; } body.print section.view {
     return `
       <div class="coin-head">
         <div><span class="eyebrow">Binance spot ${a}USDT · perpetual for funding, OI, perp CVD${S && S.spot_note ? " · " + S.spot_note : ""}</span>
-          <div class="px" id="coin-px">${S ? fmtPx(d1.close) : ""}</div></div>
+          <div class="px" id="coin-px"><span data-live-px="${a}">${S ? fmtPx(d1.close) : ""}</span> <small class="livetag" data-live-tag="${a}" hidden></small></div></div>
         <div class="controls">
           ${seg("coinTf", COIN_TF, state.coinTf)}
           ${seg("coinMa", [["sma", "SMA"], ["ema", "EMA"]], state.coinMa)}
@@ -1352,7 +1368,7 @@ body.print .wrap { max-width: 1400px; padding: 24px; } body.print section.view {
     return [c];
   }
 
-  const MORE_COINS = ["DASH", "ZEN", "LDO", "ENA", "AAVE", "SUI", "UNI", "NEAR", "DOGE", "HYPE"];
+  const MORE_COINS = ["DASH", "ZEN", "LDO", "ENA", "AAVE", "SUI", "UNI", "NEAR", "DOGE", "HYPE", "ADA", "FET", "STRK"];
   function renderCoin(a, view = a.toLowerCase()) {
     state.coinTf = state.coinTf || "1d"; state.coinMa = state.coinMa || "sma"; state.coinScale = state.coinScale || "log";
     // coin views share element ids: only the visible one keeps its content
@@ -1360,8 +1376,9 @@ body.print .wrap { max-width: 1400px; padding: 24px; } body.print section.view {
     const host = $("#view-" + view);
     for (const c of coinCharts) { try { c.remove(); } catch (e) {} } coinCharts = [];
     host.innerHTML = (view === "more" ? `<div class="controls">${seg("moreCoin", MORE_COINS.map((c) => [c, c]), a)}</div>` : "") + coinShell(a);
+    watchLive(a);
     loadCoin(a).then((J) => { if (state.view === view && $("#view-" + view).contains($("#cp-price"))) drawCoin(a, J); })
-      .catch((e) => { $("#coin-status").textContent = `Couldn't load ${a} data (${e.message}). Ask Claude to refresh the dashboard.`; });
+      .catch((e) => { $("#coin-status").textContent = `Couldn't load ${a} data (${e.message}). Tap 更新数据 at the top to republish the data.`; });
   }
 
   function drawCoin(a, J) {
@@ -1520,7 +1537,7 @@ body.print .wrap { max-width: 1400px; padding: 24px; } body.print section.view {
   };
   function renderSince() {
     const v = $("#view-since"), S = D.since;
-    if (!S || !S.coins || !Object.keys(S.coins).length) { v.innerHTML = `<div class="err"><h2>No data yet</h2><p class="sub">Ask Claude to refresh the dashboard.</p></div>`; return; }
+    if (!S || !S.coins || !Object.keys(S.coins).length) { v.innerHTML = `<div class="err"><h2>No data yet</h2><p class="sub">Tap 更新数据 at the top to republish the data.</p></div>`; return; }
     const coins = Object.keys(S.coins);
     const stat = coins.map((c) => {
       const x = S.coins[c], p = x.pct.filter(isNum), last = lastVal(x.pct);
@@ -1602,7 +1619,134 @@ body.print .wrap { max-width: 1400px; padding: 24px; } body.print section.view {
     };
   }
 
+  // ================================================================ TOP 50 (Binance data: CoinGecko top-50 list + coin pages)
+  function renderTop50() {
+    const v = $("#view-top50"), T = D.top50;
+    if (!T || !T.rows || !T.rows.length) { v.innerHTML = `<div class="err"><h2>No data yet</h2><p class="sub">Top-50 data appears after the next hourly run.</p></div>`; return; }
+    const cols = [["rank", "#"], ["c", "Coin"], ["px", "Price"], ["d1", "24h"], ["d7", "7d"], ["d30", "30d"], ["v7", "7d vs BTC"], ["v30", "30d vs BTC"],
+      ["from_hi", "From 30d high"], ["sma50", "vs 50d avg"], ["oi1", "OI 24h"], ["oi7", "OI 7d"], ["fund", "Funding 3d"], ["vol24", "Spot vol 24h"]];
+    state.t50 = state.t50 && cols.some((c) => c[0] === state.t50.k) ? state.t50 : { k: "d7", dir: -1 };
+    const S = state.t50;
+    const rows = T.rows.slice().sort((a, b) => { const x = a[S.k], y = b[S.k];
+      if (S.k === "c") return S.dir * String(x).localeCompare(String(y));
+      if (!isNum(x)) return isNum(y) ? 1 : 0; if (!isNum(y)) return -1; return S.dir * (x - y); });
+    const alts = T.rows.filter((r) => r.c !== "BTC"), btc = T.rows.find((r) => r.c === "BTC") || {};
+    const med = (k) => { const a = alts.map((r) => r[k]).filter(isNum).sort((p, q) => p - q), m = a.length >> 1; return !a.length ? null : a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
+    const beat7 = alts.filter((r) => isNum(r.v7) && r.v7 > 0).length;
+    const nS = alts.filter((r) => isNum(r.sma50)).length, above = alts.filter((r) => isNum(r.sma50) && r.sma50 > 0).length;
+    const asOf = T.as_of_utc.replace("T", " ").slice(0, 16);
+    const t = (k, val, d) => `<div class="tile"><div class="k">${k}</div><div class="v">${val}</div><div class="d">${d}</div></div>`;
+    const pc = (x, d = 1, u = "%") => `<span class="${signCls(x)}">${sgn(x, d, u)}</span>`;
+    const cell = (r, k) => k === "rank" ? (r.rank || "·") : k === "c" ? `${r.c}${r.page ? ' <span style="color:var(--ink-3)" title="has its own coin page">◆</span>' : ""}`
+      : k === "px" ? fmtPx(r.px) : k === "vol24" ? (isNum(r.vol24) ? "$" + fmt(r.vol24, r.vol24 >= 100 ? 0 : 1) + "M" : "–")
+      : k === "fund" ? pc(r.fund, 2, "") : (k === "v7" || k === "v30") ? pc(r[k], 1, " pts") : pc(r[k], 1);
+    v.innerHTML = `
+      <div><span class="eyebrow">Binance spot · latest hourly close ${asOf} UTC · list = CoinGecko top 50 on ${T.list_as_of} (stablecoins out) + coin pages</span>
+        <h2>Top 50: ${beat7} of ${alts.length} alts beat BTC over 7 days</h2>
+        <p class="sub">Tap a column to sort. Rolling windows from the latest hourly close, like an exchange app.</p></div>
+      <div class="tiles">
+        ${t("BTC · 24h", pc(btc.d1), `7d ${sgn(btc.d7, 1)} · 30d ${sgn(btc.d30, 1)}`)}
+        ${t("Median alt · 24h", pc(med("d1")), `vs BTC ${sgn(med("v1"), 1, " pts")}`)}
+        ${t("Median alt · 7d", pc(med("d7")), `vs BTC ${sgn(med("v7"), 1, " pts")}`)}
+        ${t("Above 50-day average", `${above} / ${nS}`, "alts priced above the average of their last 50 daily closes")}
+      </div>
+      <div class="card"><div class="card-h"><h3>All coins</h3><span class="last">sorted by ${cols.find((c) => c[0] === S.k)[1]} ${S.dir < 0 ? "↓" : "↑"}</span></div>
+        <div class="tbl-wrap"><table id="t50"><thead><tr>${cols.map(([k, l]) => `<th data-k="${k}" style="cursor:pointer${k === "c" ? ";text-align:left" : ""}">${l}${S.k === k ? (S.dir < 0 ? " ↓" : " ↑") : ""}</th>`).join("")}</tr></thead><tbody>
+        ${rows.map((r) => `<tr${r.c === "BTC" ? ' style="font-weight:650"' : ""}>${cols.map(([k]) => `<td${k === "c" ? ' style="text-align:left"' : ""}>${cell(r, k)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+        <div class="note"><b>vs BTC</b> = the coin's % move minus BTC's, in percentage points. <b>From 30d high</b> = below the highest hourly high of the last 30 days. <b>vs 50d avg</b> = price vs the average of the last 50 closed daily closes. <b>OI</b> = Binance USDT perp open interest counted in coins (price moves don't count); live hourly from the VPN step, else the archive (a day behind). <b>Funding 3d</b> = average Binance funding over 3 days, basis points per 8 hours. ◆ = has its own coin page. NEXO has no Binance perp.</div></div>`;
+    $("#t50 thead").onclick = (ev) => { const th = ev.target.closest("th[data-k]"); if (!th) return; const k = th.dataset.k;
+      state.t50 = { k, dir: S.k === k ? -S.dir : (k === "c" || k === "rank" ? 1 : -1) }; save(); renderTop50(); };
+  }
+
   // ================================================================ ETF DAILY REPORT (zh / en), also the daily image (?print)
+  // ================================================================ LIVE PRICES + UPDATE BUTTON
+  // Live: Crypto.com get_ticker through the viewer's connector (same as the 换仓 page). Update: fires the
+  // scheduled task "Datahub 看板一键更新" on the Mac mini via the Claude Code Remote connector; that run
+  // republishes this artifact with the latest hourly export (data.json + coins/*.json).
+  const UPDATE_TRIGGER = "trig_0189Lwk8qz9MKhC8R48dG1ms";
+  const LIVE = {}, LIVE_WATCH = {}, LIVE_NONE = {};
+  let MCP = null;
+  const ptTime = (ms) => { try { return new Date(ms).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) + " PT"; } catch (e) { return new Date(ms).toISOString(); } };
+  function applyLive() {
+    for (const a in LIVE) {
+      const L = LIVE[a];
+      document.querySelectorAll(`[data-live-px="${a}"]`).forEach((e) => { e.textContent = fmtPx(L.last); });
+      document.querySelectorAll(`[data-live-chg="${a}"]`).forEach((e) => { e.textContent = sgn(L.chg * 100) + " 24h"; e.className = signCls(L.chg); });
+      document.querySelectorAll(`[data-live-tag="${a}"]`).forEach((e) => { e.hidden = false; if (!e.textContent) e.textContent = "live " + ptTime(L.ts).replace(/^\d+\/\d+, /, ""); });
+    }
+    const ts = Object.values(LIVE).map((x) => x.ts).filter(isNum);
+    $("#live-asof").textContent = ts.length ? `Live prices · Crypto.com · ${ptTime(Math.max(...ts))}` : "";
+  }
+  function dropLive(a) { delete LIVE[a]; document.querySelectorAll(`[data-live-tag="${a}"]`).forEach((e) => { e.hidden = true; }); applyLive(); }
+  function watchLive(a) {
+    if (!MCP || LIVE_WATCH[a] || LIVE_NONE[a]) return;
+    LIVE_WATCH[a] = MCP.watchTool("Crypto.com", "get_ticker", { instrument_name: a + "_USD" }, (ev) => {
+      if (ev.type === "data") {
+        let p = ev.result && ev.result.payload;
+        if (typeof p === "string") { try { p = JSON.parse(p); } catch (e) { p = null; } }
+        const last = p ? parseFloat(p.last) : NaN, chg = p ? parseFloat(p.change) : NaN;
+        if (!(last > 0)) return;
+        const ts = (ev.result.cache && ev.result.cache.storedAt) || Date.parse(p.timestamp) || Date.now();
+        LIVE[a] = { last, chg: isNaN(chg) ? 0 : chg, ts };
+        applyLive();
+      } else {
+        const c = ev.error && ev.error.code;
+        if (c === "tool_error") { LIVE_NONE[a] = true; if (LIVE_WATCH[a]) { LIVE_WATCH[a](); delete LIVE_WATCH[a]; } dropLive(a); }   // no such pair on Crypto.com (e.g. ZEC)
+        else if (["needs_reauth", "server_not_connected", "selection_required", "not_in_manifest", "blocked_by_policy", "approval_required", "not_granted", "capability_disabled"].includes(c)) {
+          dropLive(a);
+          $("#live-asof").textContent = c === "needs_reauth" ? "Live prices off: reconnect Crypto.com in claude.ai Settings → Connectors" : "Live prices off (Crypto.com connector not available here) · showing the snapshot";
+        }
+      }
+    }, { refetchInterval: 30000 });
+  }
+
+  const FIRED_KEY = "mdh-update-fired";
+  const updMsg = (t, bad) => { const m = $("#upd-msg"); m.textContent = t; m.className = "upd-msg" + (bad ? " bad" : ""); };
+  function lastFired() { try { return Number(localStorage.getItem(FIRED_KEY)) || 0; } catch (e) { return 0; } }
+  function updButtonState() {
+    const b = $("#upd-btn"), t = lastFired(), mins = (Date.now() - t) / 6e4;
+    if (t && mins < 10) { b.disabled = true; updMsg(`更新已在 ${ptTime(t)} 开始（Mac mini 上运行，约 3–6 分钟），完成后页面会换成新版本；没自动刷新就重新打开。`); }
+    else b.disabled = false;
+  }
+  async function fireUpdate() {
+    const b = $("#upd-btn"); b.disabled = true; updMsg("正在启动更新…");
+    try {
+      await MCP.callTool("Claude Code Remote", "fire_trigger", { trigger_id: UPDATE_TRIGGER });
+      try { localStorage.setItem(FIRED_KEY, String(Date.now())); } catch (e) {}
+      updButtonState(); setTimeout(updButtonState, 10 * 6e4 + 500);
+    } catch (e) {
+      const c = e && e.code;
+      b.disabled = false;
+      if (c === "server_not_connected" || c === "selection_required") updMsg("需要 Claude Code Remote 连接器：在 claude.ai 设置 → Connectors 里添加后再点。", true);
+      else if (c === "needs_reauth") updMsg("Claude Code Remote 连接已过期：在 claude.ai 设置 → Connectors 里重新连接。", true);
+      else if (c === "not_in_manifest" || c === "not_granted") updMsg("这个页面没有获得触发更新的授权。刷新页面后再点，并在弹窗里允许。", true);
+      else if (c === "blocked_by_policy" || c === "approval_required") updMsg("组织策略不允许在页面里触发更新。", true);
+      else if (c === "tool_error") updMsg("任务没启动：" + (e.message || "未知错误") + "（可能是 Mac mini 离线或 Claude 桌面端没开）", true);
+      else { updMsg("不确定是否已启动（连接超时）。等 5 分钟再看，别连续点。", true); try { localStorage.setItem(FIRED_KEY, String(Date.now())); } catch (x) {} updButtonState(); }
+    }
+  }
+  $("#upd-btn").addEventListener("click", fireUpdate);
+  function showAge() {
+    if (!D) return;
+    const g = Date.parse(String(D.generated_at).replace(" UTC", "Z").replace(" ", "T"));
+    if (!isNum(g)) return;
+    const h = (Date.now() - g) / 36e5, ago = h < 1 ? Math.max(1, Math.round(h * 60)) + " min ago" : h < 48 ? h.toFixed(1) + " h ago" : Math.round(h / 24) + " days ago";
+    const lastEtf = D.etf.BTC.date[D.etf.BTC.date.length - 1];
+    const a = $("#asof");
+    a.textContent = `Data ${ptTime(g)} (${ago}) · ETF flows through ${lastEtf}` + (h > 3 ? " · 已过时，点「更新数据」" : "");
+    a.classList.toggle("stale", h > 3);
+  }
+  setInterval(showAge, 60000);
+  if (window.claude && window.claude.use) window.claude.use("mcp").then((mcp) => {
+    if (!mcp) return;
+    MCP = mcp;
+    $("#upd-row").hidden = false; updButtonState();
+    for (const a of ["BTC", "ETH", "SOL", "XRP"]) watchLive(a);
+    const v = state.view; if (v && !["overview", "etf", "market", "deriv", "since", "etfreport", "top50"].includes(v)) {
+      const a = v === "more" ? (MORE_COINS.includes(state.moreCoin) ? state.moreCoin : MORE_COINS[0]) : v.toUpperCase(); watchLive(a);
+    }
+  }).catch(() => {});
+
   const PRINT = /[?&]print\b/.test(location.search);
   const ER_T = {
     zh: { title: (a) => `${a} 现货 ETF 日报`, sub: "美国现货 ETF · 持仓数量观察", ny: "纽约时间", hold: "总持仓", day: "当日净变动", d7: "最近七个交易日", mtd: "本月以来",
@@ -1675,8 +1819,8 @@ body.print .wrap { max-width: 1400px; padding: 24px; } body.print section.view {
         </div>
         <div class="card er-text"><div class="card-h"><h3>${L.summary}</h3></div><p>${r.text[state.erLang]}</p></div>
         <div class="er-grid3">
-          <div class="card"><div class="card-h"><h3>${L.trend(n)}</h3><span class="last">${a}</span></div><div class="chart" style="height:260px"><canvas id="er-hold"></canvas></div><div class="note">${L.coinsNote}</div></div>
-          <div class="card"><div class="card-h"><h3>${L.bars(n)}</h3><span class="last">${a}</span></div><div class="chart" style="height:260px"><canvas id="er-bars"></canvas></div><div class="note">${zh ? "按交易日记账；正为增持，负为减持" : "By trade date; positive = added"}</div></div>
+          <div class="card"><div class="card-h"><h3>${L.trend(n)}</h3><span class="last">${a}${n < state.erWin ? (zh ? ` · 只有 ${n} 个交易日数据` : ` · only ${n} sessions of data`) : ""}</span></div><div class="chart" style="height:260px"><canvas id="er-hold"></canvas></div><div class="note">${L.coinsNote}</div></div>
+          <div class="card"><div class="card-h"><h3>${L.bars(n)}</h3><span class="last">${a}${n < state.erWin ? (zh ? ` · 只有 ${n} 个交易日数据` : ` · only ${n} sessions of data`) : ""}</span></div><div class="chart" style="height:260px"><canvas id="er-bars"></canvas></div><div class="note">${zh ? "按交易日记账；正为增持，负为减持" : "By trade date; positive = added"}</div></div>
           <div class="card"><div class="card-h"><h3>${L.focus}</h3><span class="last">${a}</span></div>
             ${fundsHave ? `<div class="er-focus"><div class="up"><h4>${L.upL}</h4>${ups.length ? ups.map((f, i) => `<div class="row"><i>${i + 1}</i><span>${nm(f)} <small>${f.ticker}</small></span><b>${sn(f.coins)}</b></div>`).join("") : "<p>–</p>"}</div>
               <div class="dn"><h4>${L.dnL}</h4>${dns.length ? dns.map((f, i) => `<div class="row"><i>${i + 1}</i><span>${nm(f)} <small>${f.ticker}</small></span><b>${sn(f.coins)}</b></div>`).join("") : "<p>–</p>"}</div></div>` : `<p class="note">${L.noFunds}</p>`}
@@ -1714,48 +1858,49 @@ body.print .wrap { max-width: 1400px; padding: 24px; } body.print section.view {
     const ob = baseOpts(); ob.scales.y.ticks.callback = (x) => num(x, 0); ob.layout = { padding: { top: 18 } };
     ob.plugins.tooltip.callbacks = { label: (c) => ` ${sn(c.parsed.y)} ${a} · ${usdM(S.usd[c.dataIndex])}` };
     draw("er-bars", { type: "bar", plugins: [lblPlugin((x) => sn(x, 0))], options: ob, data: { labels, datasets: [{ data: S.coins, backgroundColor: S.coins.map((x) => x >= 0 ? css("--up") : css("--down")), borderRadius: 4, borderSkipped: "start", maxBarThickness: 40 }] } });
-    $("#er-print").onclick = () => { const u = new URL(location.href); u.searchParams.set("print", "1"); u.hash = "etfreport"; window.open(u.toString(), "_blank"); };
+    $("#er-print").onclick = () => { const u = new URL(location.href); u.searchParams.set("print", "1"); u.searchParams.set("asset", state.erAsset); u.searchParams.set("lang", state.erLang); u.searchParams.set("win", String(state.erWin)); u.hash = "etfreport"; window.open(u.toString(), "_blank"); };
   }
 
   // ================================================================ shell
-  const renderers = { overview: renderOverview, etf: renderEtf, market: renderMarket, deriv: renderDeriv, since: renderSince, etfreport: renderEtfReport };
+  const renderers = { overview: renderOverview, etf: renderEtf, market: renderMarket, deriv: renderDeriv, since: renderSince, etfreport: renderEtfReport, top50: renderTop50 };
   for (const a of ["BTC", "ETH", "XRP", "SOL", "ZEC"]) renderers[a.toLowerCase()] = () => renderCoin(a);
   renderers.more = () => renderCoin(MORE_COINS.includes(state.moreCoin) ? state.moreCoin : MORE_COINS[0], "more");
   function show(view) {
     state.view = view; save();
     for (const b of document.querySelectorAll("nav.tabs button")) b.setAttribute("aria-selected", String(b.dataset.view === view));
     for (const k in renderers) $("#view-" + k).hidden = k !== view;
-    if (D) renderers[view]();
+    if (D) { renderers[view](); applyLive(); }
   }
   document.addEventListener("click", (ev) => {
     const tab = ev.target.closest("nav.tabs button"); if (tab) { history.replaceState(null, "", "#" + tab.dataset.view); show(tab.dataset.view); return; }
     const b = ev.target.closest("button[data-seg]"); if (!b) return;
     const k = b.dataset.seg; const raw = b.dataset.v;
-    state[k] = (k === "etfRange" || k === "mktRange" || k === "erWin") ? Number(raw) : raw; save(); renderers[state.view]();
+    state[k] = (k === "etfRange" || k === "mktRange" || k === "erWin") ? Number(raw) : raw; save(); renderers[state.view](); applyLive();
   });
   const mq = matchMedia("(prefers-color-scheme: dark)");
-  const rerender = () => D && renderers[state.view]();
+  const rerender = () => { if (D) { renderers[state.view](); applyLive(); } };
   mq.addEventListener ? mq.addEventListener("change", rerender) : mq.addListener(rerender);
   new MutationObserver(rerender).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
   function footer() {
     $("#footer").innerHTML = `<span class="eyebrow">Data freshness · last successful run per source (UTC)</span>
       <div class="fresh">${D.freshness.map((f) => `<span class="pill" title="${f.status}">${f.source} ${f.last_run.slice(5)}${f.status === "ok" ? "" : " · " + f.status}</span>`).join("")}</div>
-      <div class="note">Snapshot of the local market-data-hub database. Sources: Binance, SoSoValue, Farside, TradingView, DefiLlama, FRED, Cboe, Nasdaq, Coin Metrics, alternative.me, Deribit, CoinGecko, Coinbase, OKX, Bybit, Hyperliquid, CFTC. Candlestick chart by <a href="https://www.tradingview.com/lightweight-charts/" target="_blank" rel="noopener">TradingView Lightweight Charts</a>. Not investment advice.</div>`;
+      <div class="note">Snapshot of the local market-data-hub database (exported hourly on the Mac mini; 更新数据 republishes the latest export). Sources: Binance, SoSoValue, Farside, TradingView, DefiLlama, FRED, Cboe, Nasdaq, Coin Metrics, alternative.me, Deribit, CoinGecko, Coinbase, OKX, Bybit, Hyperliquid, CFTC. Candlestick chart by <a href="https://www.tradingview.com/lightweight-charts/" target="_blank" rel="noopener">TradingView Lightweight Charts</a>. Not investment advice.</div>`;
   }
   if (PRINT) { document.body.classList.add("print"); document.documentElement.setAttribute("data-theme", "light");
-    const q = new URLSearchParams(location.search); if (q.get("asset")) state.erAsset = q.get("asset"); if (q.get("lang")) state.erLang = q.get("lang"); state.erWin = 7; }
+    const q = new URLSearchParams(location.search); if (q.get("asset")) state.erAsset = q.get("asset"); if (q.get("lang")) state.erLang = q.get("lang"); state.erWin = [7, 30, 90].includes(Number(q.get("win"))) ? Number(q.get("win")) : 7; }
   const fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
   fontsReady.then(() => fetch("data.json", { cache: "no-store" })).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then((d) => {
     D = d;
     const lastEtf = D.etf.BTC.date[D.etf.BTC.date.length - 1];
     $("#asof").textContent = `Snapshot ${D.generated_at} · ETF flows through ${lastEtf}`;
+    showAge();
     footer();
     const h = location.hash.replace("#", "");
     show(renderers[h] ? h : (renderers[state.view] ? state.view : "overview"));
   }).catch((e) => {
     $("#asof").textContent = "Snapshot unavailable";
-    $("#view-overview").innerHTML = `<div class="err"><h2>The data file didn't load</h2><p class="sub">The page couldn't read data.json (${e.message}). Ask Claude to refresh the dashboard, which republishes the data file.</p></div>`;
+    $("#view-overview").innerHTML = `<div class="err"><h2>The data file didn't load</h2><p class="sub">The page couldn't read data.json (${e.message}). Tap 更新数据 at the top to republish the data file.</p></div>`;
   });
 })();
 </script>

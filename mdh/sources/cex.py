@@ -42,32 +42,43 @@ class coinbase:
     GRAN = {"1h": 3600, "1d": 86400}
 
     @staticmethod
+    def _one(ctx, asset, interval, gran, full):
+        start = pd.Timestamp(settings.CEX_SPOT_START[interval])
+        if asset in settings.COINBASE_EXTRA:
+            start = max(start, pd.Timestamp(settings.COINBASE_EXTRA_START))
+        last = None if full else _last_ts(ctx.con, "cex_spot", "venue='coinbase' AND symbol=? AND interval=?", [asset, interval])
+        if last is not None:
+            start = max(start, last - pd.Timedelta(seconds=3 * gran))
+        end_all = pd.Timestamp(NOW())
+        rows, cur = [], start
+        while cur < end_all:
+            nxt = min(cur + pd.Timedelta(seconds=gran * 299), end_all)
+            data = ctx.http.get_json(coinbase.URL.format(p=f"{asset}-USD"), params={
+                "granularity": gran, "start": cur.isoformat() + "Z", "end": nxt.isoformat() + "Z"})
+            if isinstance(data, list):
+                rows += data
+            cur = nxt
+        if not rows:
+            return 0
+        df = pd.DataFrame(rows, columns=["t", "low", "high", "open", "close", "volume"])
+        out = pd.DataFrame({"venue": "coinbase", "symbol": asset, "interval": interval,
+                            "ts": pd.to_datetime(df["t"], unit="s"), "open": df["open"], "high": df["high"],
+                            "low": df["low"], "close": df["close"], "volume": df["volume"]})
+        return db.upsert(ctx.con, "cex_spot", out, ["venue", "symbol", "interval", "ts"])
+
+    @staticmethod
     def run(ctx, full=False):
-        total = 0
+        from mdh.core.http import HttpError
+        from mdh.sources.binance_hist import load_backfill
+        res = {}
+        load_backfill(ctx, res)                       # bulk history built in the cloud (data/backfill/binance_hist)
+        total = res.get("cex_spot", 0)
         for asset in ASSETS + ["USDT"] + settings.COINBASE_EXTRA:
             for interval, gran in coinbase.GRAN.items():
-                start = pd.Timestamp(settings.CEX_SPOT_START[interval])
-                if asset in settings.COINBASE_EXTRA:
-                    start = max(start, pd.Timestamp(settings.COINBASE_EXTRA_START))
-                last = None if full else _last_ts(ctx.con, "cex_spot", "venue='coinbase' AND symbol=? AND interval=?", [asset, interval])
-                if last is not None:
-                    start = max(start, last - pd.Timedelta(seconds=3 * gran))
-                end_all = pd.Timestamp(NOW())
-                rows, cur = [], start
-                while cur < end_all:
-                    nxt = min(cur + pd.Timedelta(seconds=gran * 299), end_all)
-                    data = ctx.http.get_json(coinbase.URL.format(p=f"{asset}-USD"), params={
-                        "granularity": gran, "start": cur.isoformat() + "Z", "end": nxt.isoformat() + "Z"})
-                    if isinstance(data, list):
-                        rows += data
-                    cur = nxt
-                if not rows:
-                    continue
-                df = pd.DataFrame(rows, columns=["t", "low", "high", "open", "close", "volume"])
-                out = pd.DataFrame({"venue": "coinbase", "symbol": asset, "interval": interval,
-                                    "ts": pd.to_datetime(df["t"], unit="s"), "open": df["open"], "high": df["high"],
-                                    "low": df["low"], "close": df["close"], "volume": df["volume"]})
-                total += db.upsert(ctx.con, "cex_spot", out, ["venue", "symbol", "interval", "ts"])
+                try:
+                    total += coinbase._one(ctx, asset, interval, gran, full)
+                except HttpError as e:   # e.g. a pair Coinbase delisted: skip it, keep the rest
+                    ctx.log.warning("coinbase %s %s: %s", asset, interval, str(e)[:200])
         return {"cex_spot": total}
 
 
@@ -169,7 +180,63 @@ class bybit:
         return out
 
     @staticmethod
+    def _run_tv_fallback(ctx, full=False):
+        """Fallback via TradingView (BYBIT:<SYM>USDT.P_OI / .P / .P_FR) when api.bybit.com returns 403 (US IP, no VPN)."""
+        import logging
+        import os
+        from tvDatafeed import Interval, TvDatafeed
+        logging.getLogger("tvDatafeed.main").setLevel(logging.CRITICAL)
+        os.environ["TZ"] = "UTC"
+        time.tzset()
+        tv = TvDatafeed()
+        oi_n = fund_n = 0
+        for asset in ASSETS:
+            sym = f"{asset}USDT"
+            for interval, tv_iv, n_bars in (("1d", Interval.in_daily, 365 if full else 15),
+                                            ("1h", Interval.in_1_hour, 500 if full else 48)):
+                oi_df = tv.get_hist(symbol=f"{sym}.P_OI", exchange="BYBIT", interval=tv_iv, n_bars=n_bars)
+                px_df = tv.get_hist(symbol=f"{sym}.P", exchange="BYBIT", interval=tv_iv, n_bars=n_bars)
+                if oi_df is None or oi_df.empty or px_df is None or px_df.empty:
+                    continue
+                px = px_df["close"].reindex(oi_df.index)
+                out = pd.DataFrame({
+                    "venue": "bybit",
+                    "symbol": asset,
+                    "interval": interval,
+                    "ts": pd.to_datetime(oi_df.index),
+                    "oi_usd": (oi_df["open"] * px).values,
+                    "volume_usd": None,
+                }).dropna(subset=["oi_usd"])
+                oi_n += db.upsert(ctx.con, "deriv_oi", out, ["venue", "symbol", "interval", "ts"])
+            fr_df = tv.get_hist(symbol=f"{sym}.P_FR", exchange="BYBIT", interval=Interval.in_1_hour,
+                                n_bars=500 if full else 72)
+            if fr_df is not None and not fr_df.empty:
+                settled = fr_df.iloc[:-1].copy()
+                settled["ts"] = pd.to_datetime(settled.index) + pd.Timedelta(hours=1)
+                settled = settled[settled["ts"].dt.hour.isin([0, 8, 16])]
+                if not settled.empty:
+                    out = pd.DataFrame({
+                        "venue": "bybit",
+                        "symbol": asset,
+                        "ts": settled["ts"].values,
+                        "funding_rate": settled["close"].astype(float).values,
+                        "interval_hours": 8.0,
+                    })
+                    fund_n += db.upsert(ctx.con, "deriv_funding", out, ["venue", "symbol", "ts"])
+        return {"deriv_oi": oi_n, "deriv_funding": fund_n}
+
+    @staticmethod
     def run(ctx, full=False):
+        try:
+            return bybit._run_direct(ctx, full=full)
+        except Exception as e:
+            if "403" in str(e):
+                ctx.log.info("bybit direct API returned 403 (no VPN); using TradingView BYBIT fallback")
+                return bybit._run_tv_fallback(ctx, full=full)
+            raise
+
+    @staticmethod
+    def _run_direct(ctx, full=False):
         oi_n = fund_n = 0
         for asset in ASSETS:
             sym = f"{asset}USDT"
@@ -232,19 +299,23 @@ class hyperliquid:
 
     @staticmethod
     def perp_assets():
-        return list(dict.fromkeys(ASSETS + settings.COIN_PAGES))
+        return list(dict.fromkeys(ASSETS + settings.COIN_PAGES + settings.TOP50_HL))
 
     @staticmethod
     def run(ctx, full=False):
+        from mdh.sources.binance_hist import load_backfill
+        res = {}
+        load_backfill(ctx, res)
         assets = hyperliquid.perp_assets()
+        hl = lambda a: settings.HL_SYMBOL.get(a, a)   # noqa: E731 - SHIB -> kSHIB
         # 1) open-interest snapshot for every perp we follow (no history API: we build it hour by hour)
         meta, ctxs = ctx.http.post(hyperliquid.URL, json={"type": "metaAndAssetCtxs"}).json()
         names = [u["name"] for u in meta["universe"]]
         now_h = pd.Timestamp(NOW()).floor("h")
         snap = []
         for asset in assets:
-            if asset in names:
-                c = ctxs[names.index(asset)]
+            if hl(asset) in names:
+                c = ctxs[names.index(hl(asset))]
                 mark = float(c["markPx"])
                 snap.append({"venue": "hyperliquid", "symbol": asset, "interval": "1h", "ts": now_h,
                              "oi_usd": float(c["openInterest"]) * mark, "volume_usd": float(c.get("dayNtlVlm") or 0)})
@@ -252,15 +323,19 @@ class hyperliquid:
         # 2) funding history (hourly), paging forward from the last stored point
         fund_n = 0
         end_ms = int(time.time() * 1000)
+        page = set(ASSETS + settings.COIN_PAGES)
         for asset in assets:
-            if asset not in names:
+            if hl(asset) not in names:
                 continue
             last = None if full else _last_ts(ctx.con, "deriv_funding", "venue='hyperliquid' AND symbol=?", [asset])
+            if asset not in page and last is not None and \
+                    pd.Timestamp(NOW()) - last < pd.Timedelta(hours=settings.HL_TOP50_FUNDING_EVERY_H):
+                continue
             first = settings.HL_FUNDING_START if asset in ASSETS else settings.HL_FUNDING_START_EXTRA
             start = int(((last + pd.Timedelta(minutes=1)) if last is not None else pd.Timestamp(first)).timestamp() * 1000)
             rows = []
             for _ in range(200):
-                data = ctx.http.post(hyperliquid.URL, json={"type": "fundingHistory", "coin": asset, "startTime": start}).json()
+                data = ctx.http.post(hyperliquid.URL, json={"type": "fundingHistory", "coin": hl(asset), "startTime": start}).json()
                 if not data:
                     break
                 rows += data
@@ -268,6 +343,7 @@ class hyperliquid:
                 if newest >= end_ms - 3_600_000 or len(data) < 500:
                     break
                 start = newest + 1
+                time.sleep(1.5)   # a full page weighs ~45 (20 + 1 per 20 rows); keeps backfills under 1200 weight/min
             if rows:
                 df = pd.DataFrame(rows)
                 out = pd.DataFrame({"venue": "hyperliquid", "symbol": asset,
@@ -299,7 +375,7 @@ class hyperliquid:
                                         "low": df["l"].astype(float), "close": df["c"].astype(float),
                                         "volume": df["v"].astype(float)})
                     spot_n += db.upsert(ctx.con, "cex_spot", out, ["venue", "symbol", "interval", "ts"])
-        return {"deriv_oi": oi_n, "deriv_funding": fund_n, "cex_spot": spot_n}
+        return {"deriv_oi": oi_n, "deriv_funding": fund_n + res.get("deriv_funding", 0), "cex_spot": spot_n + res.get("cex_spot", 0)}
 
 
 # ============================================================================ CFTC: CME crypto futures positioning (weekly)
@@ -346,19 +422,20 @@ class cftc:
 # ============================================================================ Binance funding (actual 8h rates; needs a non-US connection)
 class binance_funding:
     NAME = "binance_funding"
-    URL = "https://fapi.binance.com/fapi/v1/fundingRate"
+    URL = "https://www.binance.com/fapi/v1/fundingRate"
 
     @staticmethod
     def run(ctx, full=False):
         import os
-        url = os.environ.get("BINANCE_FAPI", "https://fapi.binance.com") + "/fapi/v1/fundingRate"
+        url = os.environ.get("BINANCE_FAPI", "https://www.binance.com") + "/fapi/v1/fundingRate"
         total = 0
         for asset in settings.BINANCE_FUNDING_ASSETS:
+            psym = settings.PERP_SYMBOL.get(asset, (f"{asset}USDT", 1))[0]   # SHIB -> 1000SHIBUSDT
             last = None if full else _last_ts(ctx.con, "deriv_funding", "venue='binance' AND symbol=?", [asset])
             start_ms = int(((last - pd.Timedelta(hours=8)) if last is not None else pd.Timestamp("2019-09-01")).timestamp() * 1000)
             rows = []
             for _ in range(20):
-                data = ctx.http.get_json(url, params={"symbol": f"{asset}USDT", "startTime": start_ms, "limit": 1000})
+                data = ctx.http.get_json(url, params={"symbol": psym, "startTime": start_ms, "limit": 1000})
                 if not data:
                     break
                 rows += data

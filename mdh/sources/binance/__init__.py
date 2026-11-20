@@ -16,6 +16,7 @@ from mdh.core import db
 
 NAME = "binance"
 RAW = settings.RAW_DIR / "binance"
+PARSER_WORKERS = 6
 
 
 def load_csvs(con):
@@ -35,12 +36,29 @@ def load_csvs(con):
 
 
 def run(ctx, full=False, symbols=None, start=None):
+    """Each symbol's parser writes only its own CSV, so symbols run in parallel (PARSER_WORKERS threads);
+    the DuckDB mirror is rebuilt afterwards on this thread."""
+    from concurrent.futures import ThreadPoolExecutor
     from .parser import BinanceMarketDataParser
     logging.getLogger("BinanceMarketDataParser").setLevel(logging.INFO)
     RAW.mkdir(parents=True, exist_ok=True)
-    for interval in settings.BINANCE_INTERVALS:
-        for sym in symbols or settings.BINANCE_SYMBOLS:
-            p = BinanceMarketDataParser(sym, interval=interval, start_date=start or settings.BINANCE_START_OVERRIDES.get(sym, settings.BINANCE_START),
-                                        output_dir=str(RAW))
-            p.run(force_update=False)
-    return load_csvs(ctx.con)
+
+    def one(sym, interval):
+        p = BinanceMarketDataParser(sym, interval=interval, start_date=start or settings.BINANCE_START_OVERRIDES.get(sym, settings.BINANCE_START),
+                                    output_dir=str(RAW))
+        p.run(force_update=False)
+
+    jobs = [(sym, interval) for interval in settings.BINANCE_INTERVALS for sym in (symbols or settings.BINANCE_SYMBOLS)]
+    failed = []
+    with ThreadPoolExecutor(max_workers=PARSER_WORKERS) as pool:
+        futs = {pool.submit(one, *j): j for j in jobs}
+        for f, j in futs.items():
+            try:
+                f.result()
+            except Exception as e:  # noqa: BLE001 - one symbol failing must not stop the others
+                failed.append(j[0])
+                ctx.log.warning("binance %s %s failed: %s", *j, e)
+    out = load_csvs(ctx.con)
+    if failed:
+        out["failed_symbols"] = len(failed)
+    return out

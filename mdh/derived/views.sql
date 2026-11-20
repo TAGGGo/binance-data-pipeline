@@ -47,7 +47,10 @@ ORDER BY date
 CREATE OR REPLACE VIEW v_net_liquidity AS
 WITH r AS (SELECT date, value * 1000 AS rrp FROM fred_series WHERE series_id = 'RRPONTSYD'),
      w AS (SELECT date, value AS walcl FROM fred_series WHERE series_id = 'WALCL'),
-     t AS (SELECT date, value AS tga FROM fred_series WHERE series_id = 'WTREGEN'),
+     -- TGA: daily Treasury DTS (treasury_tga_daily, from 2026-10-29) where available, else FRED weekly WTREGEN
+     t AS (SELECT date, value AS tga FROM fred_series WHERE series_id = 'WTREGEN'
+           AND date < coalesce((SELECT min(date) FROM treasury_tga_daily), DATE '9999-12-31')
+           UNION ALL SELECT date, tga_musd AS tga FROM treasury_tga_daily),
      rw AS (SELECT r.date, r.rrp, w.walcl FROM r ASOF LEFT JOIN w ON r.date >= w.date)
 SELECT rw.date, rw.walcl / 1e6 AS fed_assets_tn, t.tga / 1e6 AS tga_tn, rw.rrp / 1e6 AS rrp_tn,
        (rw.walcl - t.tga - rw.rrp) / 1e6 AS net_liquidity_tn
@@ -240,3 +243,16 @@ SELECT date, prev_date, category,
        sum(now_xrp - prev_xrp) AS net_all,
        count(*) FILTER (WHERE now_xrp >= 1e7) AS accounts_10m
 FROM j GROUP BY ALL ORDER BY 1, 3
+;;
+
+-- 5-minute OI in coins by venue (oi_5m, from 2026-10-08). OKX = linear + inverse swaps; bybit USD priced off Binance.
+-- Use coin columns to judge "new positions vs closing": USD OI drops just because price drops.
+CREATE OR REPLACE VIEW v_oi_5m AS
+SELECT symbol, ts,
+       sum(oi_coin) FILTER (WHERE venue = 'binance') AS binance_coin,
+       sum(oi_coin) FILTER (WHERE venue = 'okx')     AS okx_coin,
+       sum(oi_coin) FILTER (WHERE venue = 'bybit')   AS bybit_coin,
+       sum(oi_coin)                                  AS total_coin,
+       count(DISTINCT venue)                         AS venues,
+       max(oi_usd / nullif(oi_coin, 0)) FILTER (WHERE venue = 'binance') AS px
+FROM oi_5m GROUP BY ALL ORDER BY symbol, ts

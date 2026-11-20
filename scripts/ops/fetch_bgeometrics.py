@@ -23,16 +23,21 @@ BASE = "https://bitcoin-data.com/v1/"
 # accumulation-trend-score (paid extra) is BGeometrics' own
 # LTH/STH 30d-change score (not Glassnode's entity-based ATS); free though not on the plan pages.
 # URPD (realized price distribution, 2K bins) is one snapshot per day -> urpd/<date>.csv, see fetch_urpd().
+# Avalon 11-01: the board uses BG (free, newest days withheld) + our own day-to-day change for the newest days.
+# Board metrics first (free plan: 10/hour, 15/day incl. URPD). Dropped from the daily list 11-01 (history kept):
+# realized-profit, realized-loss, sth-mvrv (research only; sth-mvrv = price / sth-realized-price).
+# Free-plan check 11-01: lth-sopr, hodl-waves-supply, supply-profit, mvrv-zscore, nupl reach yesterday;
+# realized-price, true-market-mean stop ~6 days back. exchange-reserve-btc / miner-reserve are paid only.
 METRICS = [
-    "nrpl-usd", "realized-profit", "realized-loss", "sth-realized-price", "true-market-mean", "realized-price",
-    "mvrv", "mvrv-zscore", "nupl", "sth-mvrv", "sopr", "sth-sopr",
-    "lth-realized-price", "puell-multiple",
+    "realized-price", "mvrv-zscore", "nupl", "puell-multiple", "sth-realized-price", "lth-realized-price",
+    "true-market-mean", "sth-sopr", "lth-sopr", "hodl-waves-supply", "accumulation-trend-score",
+    "mvrv", "sopr", "nrpl-usd",
 ]
 # extra metrics fetched only with BGEOMETRICS_TOKEN (paid Advanced plan, 200/h 300/day, full history)
 PAID_EXTRA = [
-    "accumulation-trend-score", "realized_profit_sth", "realized_loss_sth", "realized_profit_lth", "realized_loss_lth", "lth-mvrv",
-    "nupl-sth", "nupl-lth", "lth-sopr", "asopr", "profit-loss", "supply-profit",
-    "cdd", "vdd-multiple", "hodl-waves-supply", "realized-cap-hodl-waves", "investor-price", "exchange-netflow-btc",
+    "realized-profit", "realized-loss", "sth-mvrv", "realized_profit_sth", "realized_loss_sth", "realized_profit_lth", "realized_loss_lth", "lth-mvrv",
+    "nupl-sth", "nupl-lth", "asopr", "profit-loss", "supply-profit",
+    "cdd", "vdd-multiple", "realized-cap-hodl-waves", "investor-price", "exchange-netflow-btc",
     "exchange-reserve-btc", "miner-net-flow", "miner-reserve", "m2global", "btc-price",
 ]
 
@@ -54,6 +59,8 @@ def fetch(ep, token=None):
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", "replace")[:300]
         return e.code, dict(e.headers), {"error": body}
+    except Exception as e:  # network drop / timeout: skip this metric this hour (11-01: an uncaught URLError killed the run)
+        return 0, {}, {"error": repr(e)[:200]}
 
 
 def merge(ep, rows):

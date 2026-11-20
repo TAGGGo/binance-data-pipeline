@@ -11,6 +11,12 @@ Tables
                        top_call_strike, top_call_oi, top_put_strike, top_put_oi)
   OI / volume are in coins (1 contract = 1 BTC / 1 ETH). IV in vol points. rr25 = 25-delta call IV minus
   25-delta put IV (positive = calls richer = upside demand; negative = puts richer = hedging/fear).
+  deribit_gex         (currency, ts, strike, call_gex_usd, put_gex_usd, gex_usd)   strikes within +-30% of spot, all expiries
+  GEX (added 2026-10-08) = gamma x OI x S^2 x 1%, i.e. USD of underlying dealers must trade per 1% move, under the
+  usual naive assumption that dealers are LONG calls and SHORT puts (customers buy puts, sell calls). So calls count
+  +, puts -. Positive net GEX = dealers hedge against the move (dampens); negative = they chase it (accelerates).
+  Summary adds: net_gex_usd, gamma_flip (spot where net GEX crosses zero, repricing gamma on a +-20% grid at fixed IV),
+  call_wall (strike with the largest +GEX), put_wall (strike with the most negative GEX), gex_near_usd (expiries <= 7d).
   main_* = the expiry with the most OI within 45 days (usually the monthly), the one whose max pain matters.
   Expiries shorter than 1 day are skipped for IV/skew (noisy); max pain is computed for every expiry.
 """
@@ -38,6 +44,41 @@ def _delta(S, K, T, iv, is_call):
         return np.nan
     d1 = (math.log(S / K) + 0.5 * iv * iv * T) / (iv * math.sqrt(T))
     return _ncdf(d1) if is_call else _ncdf(d1) - 1
+
+
+def _gamma(S, K, T, iv):
+    """Black-Scholes gamma, vectorised (numpy arrays)."""
+    S, K, T, iv = (np.asarray(x, dtype=float) for x in (S, K, T, iv))
+    with np.errstate(divide="ignore", invalid="ignore"):
+        d1 = (np.log(S / K) + 0.5 * iv * iv * T) / (iv * np.sqrt(T))
+        g = np.exp(-0.5 * d1 * d1) / np.sqrt(2 * np.pi) / (S * iv * np.sqrt(T))
+    return np.where((T > 0) & (iv > 0), g, 0.0)
+
+
+def gex(df: pd.DataFrame, spot: float):
+    """Per-strike GEX table + summary dict. df = parse_book() output."""
+    d = df[(df.open_interest > 0) & (df.iv > 0)]
+    sign = np.where(d.is_call, 1.0, -1.0)
+    oi = d.open_interest.values
+    def total(S):
+        return float((sign * oi * _gamma(S, d.strike.values, d["T"].values, d.iv.values) * S * S * 0.01).sum())
+    g = sign * oi * _gamma(spot, d.strike.values, d["T"].values, d.iv.values) * spot * spot * 0.01
+    t = pd.DataFrame({"strike": d.strike.values, "call": np.where(d.is_call, g, 0.0), "put": np.where(d.is_call, 0.0, g)})
+    t = t.groupby("strike", as_index=False).sum()
+    t["gex"] = t.call + t.put
+    t = t[(t.strike >= spot * 0.7) & (t.strike <= spot * 1.3)].rename(
+        columns={"call": "call_gex_usd", "put": "put_gex_usd", "gex": "gex_usd"})
+    grid = np.linspace(spot * 0.8, spot * 1.2, 81)
+    vals = np.array([total(x) for x in grid])
+    flips = [float(grid[i] - vals[i] * (grid[i + 1] - grid[i]) / (vals[i + 1] - vals[i]))
+             for i in range(len(grid) - 1) if np.sign(vals[i]) != np.sign(vals[i + 1])]
+    near = d["T"].values * 365 <= 7
+    summ = {"net_gex_usd": total(spot),
+            "gex_near_usd": float(g[near].sum()),
+            "gamma_flip": min(flips, key=lambda x: abs(x - spot)) if flips else None,
+            "call_wall": float(t.loc[t.gex_usd.idxmax(), "strike"]) if len(t) and t.gex_usd.max() > 0 else None,
+            "put_wall": float(t.loc[t.gex_usd.idxmin(), "strike"]) if len(t) and t.gex_usd.min() < 0 else None}
+    return t, summ
 
 
 def parse_book(rows: list[dict], now: pd.Timestamp) -> pd.DataFrame:
@@ -119,7 +160,11 @@ def snapshot(book_rows: list[dict], currency: str, now: pd.Timestamp, spot: floa
     summ.update({"front_expiry": front.expiry, "front_max_pain": front.max_pain, "atm_iv_front": front.atm_iv,
                  "rr25_front": front.rr25,
                  "main_expiry": main.expiry, "main_max_pain": main.max_pain, "main_oi_usd": main.oi_usd, "atm_iv_30d": _interp_30d(ex, "atm_iv"), "rr25_30d": _interp_30d(ex, "rr25")})
-    return pd.DataFrame([summ]), ex
+    gt, gs = gex(df, spot)
+    summ.update(gs)
+    gt.insert(0, "ts", ts)
+    gt.insert(0, "currency", currency)
+    return pd.DataFrame([summ]), ex, gt
 
 
 class deribit_options:
@@ -128,7 +173,7 @@ class deribit_options:
     @staticmethod
     def run(ctx, full=False):
         now = pd.Timestamp(datetime.now(timezone.utc).replace(tzinfo=None))
-        n1 = n2 = 0
+        n1 = n2 = n3 = 0
         for cur in settings.DERIBIT_OPTIONS:
             rows = ctx.http.get_json(BOOK, params={"currency": cur, "kind": "option"})["result"]
             spot = float(np.median([r["estimated_delivery_price"] for r in rows]))
@@ -137,7 +182,8 @@ class deribit_options:
                                                  "start_timestamp": ms - 3 * 3600_000, "end_timestamp": ms})
             data = dv["result"]["data"]
             dvol = float(data[-1][4]) if data else None
-            summ, ex = snapshot(rows, cur, now, spot, dvol)
+            summ, ex, gt = snapshot(rows, cur, now, spot, dvol)
+            n3 += db.upsert(ctx.con, "deribit_gex", gt, ["currency", "ts", "strike"])
             n1 += db.upsert(ctx.con, "deribit_opt_summary", summ, ["currency", "ts"])
             n2 += db.upsert(ctx.con, "deribit_opt_expiry", ex, ["currency", "ts", "expiry"])
-        return {"deribit_opt_summary": n1, "deribit_opt_expiry": n2}
+        return {"deribit_opt_summary": n1, "deribit_opt_expiry": n2, "deribit_gex": n3}

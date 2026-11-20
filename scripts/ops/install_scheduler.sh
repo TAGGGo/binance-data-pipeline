@@ -32,7 +32,10 @@ cat > "$PLIST" <<EOF
 </dict></plist>
 EOF
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-launchctl bootstrap "gui/$(id -u)" "$PLIST"
+for i in 1 2 3 4 5; do  # bootout finishes asynchronously; a quick re-bootstrap can fail with "5: Input/output error"
+  launchctl bootstrap "gui/$(id -u)" "$PLIST" 2>/dev/null && break
+  sleep 2; [[ $i == 5 ]] && launchctl bootstrap "gui/$(id -u)" "$PLIST"
+done
 echo "installed $LABEL: runs scripts/ops/run_update.sh every hour at :07 (python: $PY)"
 echo "If the log shows 'Operation not permitted', add /bin/bash and $PY to System Settings > Privacy & Security > Full Disk Access."
 echo "tail -f $REPO/data/logs/update.log"
