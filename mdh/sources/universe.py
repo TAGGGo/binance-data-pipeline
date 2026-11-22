@@ -143,6 +143,21 @@ def run(ctx, full=False):
                             os.unlink(tpath)
                 except Exception:
                     pass
+    about_file = settings.ROOT.parent.parent / "crypto-chat" / "src" / "coin_about.json"
+    if about_file.is_file():
+        try:
+            abouts = json.loads(about_file.read_text(encoding="utf-8"))
+            dirty_about = False
+            for x in top_items:
+                sym = x["symbol"].upper()
+                if sym not in abouts:
+                    nm = x.get("name") or sym
+                    abouts[sym] = f"{nm}（{sym}）是市值排名前列的加密资产，已在主流现货交易所上线交易。"
+                    dirty_about = True
+            if dirty_about:
+                about_file.write_text(json.dumps(abouts, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        except Exception:
+            pass
     u["as_of"] = now.strftime("%Y-%m-%d %H:%M")
     u["rank"] = {c: i + 2 for i, c in enumerate(top)}   # BTC = 1, like the static list
     tracked = set(settings.BINANCE_UNIVERSE) | {"BTC"}
