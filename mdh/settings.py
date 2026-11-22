@@ -123,6 +123,9 @@ TV_SYMBOLS = [
     ("FX_IDC", "USDKRW"),     # USD/KRW for the Kimchi premium
     ("KRAKEN", "XMRUSD"),     # Monero: Binance delisted it in 2024 (币聊 隐私币 sector, Avalon 10-28)
     ("KRAKEN", "SNEKUSD"),    # Snek (Cardano meme coin, listed on Kraken, Avalon 2026-11-20)
+    ("KRAKEN", "VVVUSD"), ("KRAKEN", "KASUSD"), ("KRAKEN", "MNTUSD"), ("KRAKEN", "SPXUSD"), ("KRAKEN", "GRASSUSD"),
+    ("KRAKEN", "CROUSD"), ("KRAKEN", "OKBUSD"), ("KRAKEN", "BGBUSD"), ("KRAKEN", "CCUSD"), ("KRAKEN", "LIGHTERUSD"),
+    ("KRAKEN", "PIUSD"), ("KRAKEN", "XDCUSD"), ("KRAKEN", "FLRUSD"), ("KRAKEN", "DRVUSD"), ("KRAKEN", "BTTUSD"),
 ]
 TV_INTERVALS = ["1d", "1h"]   # daily = full history; hourly = rolling ~2 months, accumulated going forward
 

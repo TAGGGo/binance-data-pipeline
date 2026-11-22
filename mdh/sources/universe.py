@@ -91,12 +91,40 @@ def run(ctx, full=False):
                                                  if s["quoteAsset"] == "USDT" and s["status"] == "TRADING"})}
         u["binance_spot_usdt"] = cache
     spot = set(cache["bases"])
+    kr_cache = u.get("kraken_spot_usd") or {}
+    if kr_cache.get("date") != today:
+        try:
+            kr_res = ctx.http.get_json("https://api.kraken.com/0/public/AssetPairs").get("result") or {}
+            kr_map = {}
+            for k, v in kr_res.items():
+                ws = v.get("wsname") or ""
+                if ws.endswith("/USD"):
+                    base = ws.split("/")[0].upper()
+                    if base == "XBT":
+                        base = "BTC"
+                    elif base == "XDG":
+                        base = "DOGE"
+                    kr_map[base] = k
+            kr_cache = {"date": today, "pairs": kr_map}
+            u["kraken_spot_usd"] = kr_cache
+        except Exception:
+            kr_cache = {"date": today, "pairs": {}}
+    kr_pairs = kr_cache.get("pairs") or {}
+    kr_coins = u.setdefault("kraken_coins", {})
     top_items = [x for i, x in enumerate(cands)
-                 if x["symbol"].upper().isascii() and x["symbol"].upper() in spot and x["symbol"].upper() != "BTC"
-                 and ((x.get("market_cap_rank") or 999) <= 150 or i < 100)]
-    top = [x["symbol"].upper() for x in top_items]
+                 if x["symbol"].upper().isascii() and not x["symbol"].upper().endswith("B")
+                 and (x["symbol"].upper() in spot or x["symbol"].upper() in kr_pairs)
+                 and x["symbol"].upper() != "BTC"
+                 and ((x.get("market_cap_rank") or 999) <= 200 or i < 140)]
+    for x in top_items:
+        sym = x["symbol"].upper()
+        if sym not in spot and sym in kr_pairs and sym not in kr_coins:
+            pair = "LIGHTERUSD" if sym == "LIT" and "LIGHTER" in kr_pairs else kr_pairs[sym]
+            kr_coins[sym] = pair
+    top = [x["symbol"].upper() for x in top_items if x["symbol"].upper() in spot]
     logo_dir = settings.ROOT.parent.parent / "crypto-chat" / "public" / "static" / "logos"
     if logo_dir.is_dir():
+        import subprocess, tempfile
         for x in top_items:
             sym = x["symbol"].upper()
             lf = logo_dir / f"{sym}.png"
@@ -104,8 +132,15 @@ def run(ctx, full=False):
             if img_url and not lf.exists():
                 try:
                     r = ctx.http.get(img_url)
-                    if r.content and r.content[:4] == b"\x89PNG":
-                        lf.write_bytes(r.content)
+                    if r.content:
+                        if r.content[:4] == b"\x89PNG":
+                            lf.write_bytes(r.content)
+                        else:
+                            with tempfile.NamedTemporaryFile(suffix=".img", delete=False) as tf:
+                                tf.write(r.content)
+                                tpath = tf.name
+                            subprocess.run(["sips", "-s", "format", "png", tpath, "--out", str(lf)], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            os.unlink(tpath)
                 except Exception:
                     pass
     u["as_of"] = now.strftime("%Y-%m-%d %H:%M")
