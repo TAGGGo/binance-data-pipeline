@@ -15,18 +15,29 @@ xf = f"{CH}/labels/extra_roots.csv"
 if os.path.exists(xf): L = pd.concat([pd.read_csv(xf)[["root", "exch", "kind"]], L])
 L = L.drop_duplicates("root"); L["grp"] = L.exch.str.replace("krakenbtc", "kraken").str.replace("gatebtc", "gate")
 L["ent"] = np.asarray(ENT[L.root.values.astype(np.int64)]).astype(np.int64)
+_x = np.load(f"{W}/xidx.npz") if os.path.exists(f"{W}/xidx.npz") else None
+PAR = _x["par"] if _x is not None else np.zeros(0, np.int64)
+NE = len(np.load(f"{WE}/root_of_ent.npy", mmap_mode="r"))
+def resolve_ent(arr):
+    e = np.asarray(arr, np.int64).copy()
+    if not len(PAR):
+        return e
+    for _ in range(64):
+        m_ = e >= NE
+        if not m_.any(): break
+        nx_ = PAR[e[m_] - NE]
+        if (nx_ == e[m_]).all(): break
+        e[m_] = nx_
+    return e
 af = f"{CH}/labels/auto_ents.csv"   # 11-03: exch_scan.py promotions (ea2 entity ids; overflow ids resolved with xidx PAR)
 if os.path.exists(af):
     A = pd.read_csv(af)
     if len(A):
-        _x = np.load(f"{W}/xidx.npz"); PAR = _x["par"]; NE = len(np.load(f"{WE}/root_of_ent.npy", mmap_mode="r")); e = A.ent.values.astype(np.int64).copy()
-        for _ in range(64):
-            m_ = e >= NE
-            if not m_.any(): break
-            nx_ = PAR[e[m_] - NE]
-            if (nx_ == e[m_]).all(): break
-            e[m_] = nx_
-        A = A.assign(ent=e, root=-1, grp=A.exch); L = pd.concat([L, A[~A.ent.isin(set(L.ent))][["root", "exch", "kind", "grp", "ent"]]])
+        A = A.assign(ent=resolve_ent(A.ent.values), root=-1, grp=A.exch); L = pd.concat([L, A[~A.ent.isin(set(L.ent))][["root", "exch", "kind", "grp", "ent"]]])
+nf = f"{CH}/labels/not_exch.csv"
+if os.path.exists(nf):
+    NX_ = set(resolve_ent(pd.read_csv(nf).ent.values).tolist())
+    L = L[~L.ent.isin(NX_)]
 cust = L.kind.astype(str).str.startswith("cold") & (L.grp == "coinbase") | (L.kind.astype(str) == "etf")
 EX = np.sort(L.ent[~cust].unique()); CU = np.sort(L.ent[cust].unique())
 egrp = L[~cust].drop_duplicates("ent").set_index("ent").grp; GN = sorted(egrp.unique())
@@ -36,17 +47,34 @@ NBIN = 150; lo = np.arange(NBIN) * 1000.0
 CUT = json.load(open(f"{W}/state.json"))["done"]   # 11-03: ea2 now follows addresses newer than the index itself (overflow entities)
 def upto(fs): return [f for f in fs if os.path.basename(f)[:10] <= CUT]
 rows, exr = [], []
+LAST_STH = ([], [], 0.0)
 for f in upto(sorted(glob.glob(f"{W}/snap/2*.npz"))):
     z = np.load(f); day = os.path.basename(f)[:10]; ids = z["ids"].astype(np.int64); b = z["B"].astype(np.float64); p = z["P"].astype(np.float64)
-    dn = float(z["dn"]); price = float(z["price"]); sth = (dn - z["T"].astype(np.float64)) < 155; sm = z["small"]
+    dn = float(z["dn"]); price = float(z["price"]); sth = (dn - z["T"].astype(np.float64)) < 155; sm = z["small"]; hs = z["h_small_sth"]
     isx = np.isin(ids, EX); isc = np.isin(ids, CU); ex = ~isx; xc = ~isx & ~isc
     hb = lambda m: np.bincount(np.minimum(p[m] // 1000, NBIN - 1).astype(np.int64), weights=b[m], minlength=NBIN)
-    H = {"ex": hb(ex) + z["h_small"], "ex_cb": hb(xc) + z["h_small"], "sth_ex": hb(ex & sth) + z["h_small_sth"], "sth_excb": hb(xc & sth) + z["h_small_sth"]}
+    H = {"ex": hb(ex) + z["h_small"], "ex_cb": hb(xc) + z["h_small"], "sth_ex": hb(ex & sth) + hs, "sth_excb": hb(xc & sth) + hs}
     np.savez(f"{W}/snap/post_{day}.npz", **H) if False else None
     conc = lambda h: 100 * h[(lo + 500 >= price * 0.95) & (lo + 500 < price * 1.05)].sum() / h.sum()
+    bi = min(max(int(price // 1000), 0), NBIN - 1)
+    sm_loss = hs[bi + 1:].sum() + hs[bi] * (1.0 - (price % 1000) / 1000.0)
+    ex_tot = b[ex & sth].sum() + sm[0]
+    sth_psil_ex = 100.0 * (b[ex & sth & (p > price)].sum() + sm_loss) / ex_tot if ex_tot > 0 else 0.0
+    xc_tot = b[xc & sth].sum() + sm[0]
+    sth_psil_excb = 100.0 * (b[xc & sth & (p > price)].sum() + sm_loss) / xc_tot if xc_tot > 0 else 0.0
+    sp_m = ex & sth
+    if sp_m.any():
+        px10 = (np.round(p[sp_m] / 10.0) * 10.0).astype(np.int64)
+        s_px = pd.Series(b[sp_m]).groupby(px10).sum()
+        s_px = s_px[s_px >= 0.1]
+        sth_big_px = [[int(k_), round(float(v_), 1)] for k_, v_ in s_px.items()]
+    else:
+        sth_big_px = []
+    LAST_STH = (sth_big_px, np.round(hs, 1).tolist(), round(float(sth_psil_ex), 2))
     w = xc & (b >= 1000)
     rows.append(dict(d=day, price=price, sth_ex=b[ex & sth].sum() + sm[0], lth_ex=b[ex & ~sth].sum() + sm[1], sth_excb=b[xc & sth].sum() + sm[0], lth_excb=b[xc & ~sth].sum() + sm[1],
                      sth_cost_ex=(b[ex & sth] * p[ex & sth]).sum() + sm[2], sth_cost_excb=(b[xc & sth] * p[xc & sth]).sum() + sm[2],
+                     sth_psil_ex=sth_psil_ex, sth_psil_excb=sth_psil_excb,
                      conc5_ex=conc(H["ex"]), conc5_excb=conc(H["ex_cb"]), whale_n=int(w.sum()), whale_bal=b[w].sum(), whale1k10k_bal=b[w & (b < 10000)].sum(), whale10k_bal=b[w & (b >= 10000)].sum()))
     g = pd.Series(b[isx], index=egrp.reindex(ids[isx]).values).groupby(level=0).sum()
     exr.append({"d": day, **{k: float(g.get(k, 0)) for k in GN}, "coinbase_pool": b[isc].sum()})
@@ -81,7 +109,7 @@ for t1 in SN:
     hr.append(r)
 pd.DataFrame(hr).to_csv(f"{O}/ea2_ats_weekly_hist.csv", index=False, float_format="%.2f")
 days = sorted(HIST); last = days[-1]; want = (dt.date.fromisoformat(last) - dt.timedelta(days=30)).isoformat(); prev = max([x for x in days if x <= want] or [days[0]])
-out = {"asof": last, "prev": prev, "lo": lo.tolist()}
+out = {"asof": last, "prev": prev, "lo": lo.tolist(), "sth_big_px": LAST_STH[0], "sth_small": LAST_STH[1], "sth_psil_asof": LAST_STH[2]}
 for k in ("ex", "ex_cb", "sth_ex", "sth_excb"): out[k] = np.round(HIST[last][k], 1).tolist(); out[k + "_prev"] = np.round(HIST[prev][k], 1).tolist()
 Xr = X[X.d >= "2023-01-01"]
 out["exch"] = {"dates": Xr.d.tolist(), "total": Xr[GN].sum(axis=1).round(0).tolist(), "cb_pool": Xr.coinbase_pool.round(0).tolist(), "last": {g: round(float(Xr[g].iloc[-1])) for g in GN}, "src": "ea2"}
