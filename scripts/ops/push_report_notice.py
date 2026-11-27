@@ -24,7 +24,28 @@ STATE = REPO / "data" / "state" / "crypto-chat-notice.txt"
 TEXT = "日报已经更新，请去『币聊』查看"
 
 
+def _load_dotenv() -> None:
+    if os.environ.get("PUSHPLUS_READER_TOKEN") or os.environ.get("PUSHPLUS_TOKEN"):
+        return
+    env_file = REPO / ".env"
+    if not env_file.exists():
+        return
+    for raw in env_file.read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        if line.startswith("export "):
+            line = line[7:].strip()
+        k, v = line.split("=", 1)
+        k, v = k.strip(), v.strip()
+        if len(v) >= 2 and v[0] == v[-1] and v[0] in ('"', "'"):
+            v = v[1:-1]
+        if k:
+            os.environ.setdefault(k, v)
+
+
 def main() -> int:
+    _load_dotenv()
     me = "--to-me" in sys.argv
     try:
         at = json.loads(REPORT.read_text()).get("at") or ""
