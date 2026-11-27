@@ -160,6 +160,149 @@ def macro_events(D):
     return out
 
 
+def zec_orderflow():
+    """Analyze 24h/12h Binance ZECUSDT 5m spot orderflow, passive iceberg absorption bars, and HL perp basis."""
+    import requests
+    try:
+        resp = requests.get(
+            "https://data-api.binance.vision/api/v3/klines",
+            params={"symbol": "ZECUSDT", "interval": "5m", "limit": 288},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            print(f"report_blocks: zec_orderflow HTTP {resp.status_code}", file=sys.stderr)
+            return None
+        raw = resp.json()
+        if not raw or len(raw) < 24:
+            return None
+        bars = []
+        for k in raw:
+            o, c, qv, tb = float(k[1]), float(k[4]), float(k[7]), float(k[10])
+            net = 2.0 * tb - qv
+            buy_pct = (tb / qv * 100.0) if qv > 0 else 50.0
+            chg_pct = ((c / o - 1.0) * 100.0) if o > 0 else 0.0
+            bars.append({"o": o, "c": c, "qv": qv, "tb": tb, "net": net, "buy_pct": buy_pct, "chg_pct": chg_pct})
+
+        def _agg(sub):
+            tot_qv = sum(b["qv"] for b in sub)
+            tot_tb = sum(b["tb"] for b in sub)
+            net_usd = 2.0 * tot_tb - tot_qv
+            buy_p = (tot_tb / tot_qv * 100.0) if tot_qv > 0 else 50.0
+            chg_p = ((sub[-1]["c"] / sub[0]["o"] - 1.0) * 100.0) if sub[0]["o"] > 0 else 0.0
+            ask_cnt = sum(1 for b in sub if b["net"] >= 150_000 and b["buy_pct"] >= 60.0 and b["chg_pct"] <= 0.10)
+            bid_cnt = sum(1 for b in sub if b["net"] <= -150_000 and b["buy_pct"] <= 40.0 and b["chg_pct"] >= -0.10)
+            return round(net_usd / 1e6, 2), round(buy_p, 1), round(chg_p, 1), ask_cnt, bid_cnt
+
+        net24_m, buy24_pct, chg24_pct, ask24, bid24 = _agg(bars)
+        net12_m, buy12_pct, chg12_pct, ask12, bid12 = _agg(bars[-144:] if len(bars) >= 144 else bars)
+        px = round(bars[-1]["c"], 2)
+
+        hl_bn_pct = None
+        try:
+            hl = requests.post(
+                "https://api.hyperliquid.xyz/info",
+                json={"type": "l2Book", "coin": "ZEC"},
+                timeout=10,
+            ).json()
+            lv = hl.get("levels") or []
+            if len(lv) >= 2 and lv[0] and lv[1] and px > 0:
+                hl_mid = (float(lv[0][0]["px"]) + float(lv[1][0]["px"])) / 2.0
+                hl_bn_pct = round((hl_mid / px - 1.0) * 100.0, 3)
+        except Exception as e:
+            print("report_blocks: zec_orderflow hl", e, file=sys.stderr)
+
+        if (
+            ask12 >= 3
+            or (ask24 >= 5 and ask24 >= bid24 * 2)
+            or (buy12_pct >= 54.0 and chg12_pct <= -1.0 and net12_m >= 3.0)
+            or (buy12_pct >= 53.0 and chg12_pct <= 0.0 and hl_bn_pct is not None and hl_bn_pct >= 0.04)
+        ):
+            status, label = "ask_iceberg", "疑似卖方冰山压盘"
+        elif (
+            bid12 >= 3
+            or (bid24 >= 5 and bid24 >= ask24 * 2)
+            or (buy12_pct <= 46.0 and chg12_pct >= 1.0 and net12_m <= -3.0)
+        ):
+            status, label = "bid_iceberg", "疑似买方冰山托底"
+        else:
+            status, label = "balanced", "无明显冰山压制"
+
+        return {
+            "status": status, "label": label, "px": px,
+            "buy24_pct": buy24_pct, "net24_m": net24_m, "chg24_pct": chg24_pct,
+            "buy12_pct": buy12_pct, "net12_m": net12_m, "chg12_pct": chg12_pct,
+            "ask24": ask24, "bid24": bid24, "ask12": ask12, "bid12": bid12,
+            "hl_bn_pct": hl_bn_pct,
+        }
+    except Exception as e:
+        print("report_blocks: zec_orderflow", e, file=sys.stderr)
+        return None
+
+
+def zec_cex_inflow(px=None):
+    """Fetch external >=5,000 ZEC deposits into Binance hot wallet in last 24h (excluding hot/cold internal transfers)."""
+    import requests
+    BN_HOT = "t1SzbuFRuPa5upV6c9ZgKb9V7fxn2b8NAKg"
+    BN_COLD = "t1gsBrGZGMyDGZw2icGnMpVBuEGVWip5kH8"
+    INTERNAL = {BN_HOT, BN_COLD}
+    try:
+        since = (datetime.now(timezone.utc) - timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
+        r1 = requests.get(
+            "https://api.blockchair.com/zcash/outputs",
+            params={"q": f"recipient({BN_HOT}),time({since}..),value(500000000000..)", "s": "time(desc)", "limit": 50},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=12,
+        )
+        if r1.status_code != 200:
+            print(f"report_blocks: zec_cex_inflow outputs HTTP {r1.status_code}", file=sys.stderr)
+            return None
+        rows = (r1.json() or {}).get("data") or []
+        if not rows:
+            return {"count": 0, "total_zec": 0, "max_zec": 0, "total_usd_m": 0.0, "events": []}
+        tx_map = {}
+        for x in rows:
+            h = x.get("transaction_hash")
+            if not h:
+                continue
+            cur = tx_map.setdefault(h, {"time": x.get("time", ""), "zec": 0.0})
+            cur["zec"] += float(x.get("value") or 0) / 1e8
+            if x.get("time", "") > cur["time"]:
+                cur["time"] = x.get("time", "")
+        hashes = list(tx_map.keys())[:20]
+        external = []
+        for i in range(0, len(hashes), 10):
+            chunk = hashes[i:i + 10]
+            r2 = requests.get(
+                f"https://api.blockchair.com/zcash/dashboards/transactions/{','.join(chunk)}",
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=12,
+            )
+            if r2.status_code != 200:
+                print(f"report_blocks: zec_cex_inflow txs HTTP {r2.status_code}", file=sys.stderr)
+                return None
+            data = (r2.json() or {}).get("data") or {}
+            for h in chunk:
+                info = data.get(h) or {}
+                inputs = info.get("inputs") or []
+                in_addrs = {inp.get("recipient") for inp in inputs if inp.get("recipient")}
+                if in_addrs & INTERNAL:
+                    continue
+                external.append({"time": tx_map[h]["time"], "zec": round(tx_map[h]["zec"]), "shielded": len(inputs) == 0})
+        external.sort(key=lambda x: -x["zec"])
+        tot = sum(x["zec"] for x in external)
+        return {
+            "count": len(external),
+            "total_zec": tot,
+            "max_zec": max((x["zec"] for x in external), default=0),
+            "total_usd_m": round(tot * px / 1e6, 2) if P.ok(px) else None,
+            "events": external[:5],
+        }
+    except Exception as e:
+        print("report_blocks: zec_cex_inflow", e, file=sys.stderr)
+        return None
+
+
 def main():
     D = json.loads(P.DATA.read_text())
     P.load_live(P.live_syms())
@@ -232,6 +375,13 @@ def main():
     sv = ((C.get("ZEC") or {}).get("sig") or {}).get("values") or {}
     prem = sv.get("cb_prem_24h_bp") if P.ok(sv.get("cb_prem_24h_bp")) else sv.get("cb_prem_bp")
     out["zec"]["cb_prem_bp"] = r(prem)
+    of = zec_orderflow()
+    if of:
+        out["zec"]["orderflow"] = of
+    zpx = (of or {}).get("px") or P.live(C, "ZEC", "px")
+    ci = zec_cex_inflow(zpx)
+    if ci is not None:
+        out["zec"]["cex_inflow"] = ci
     m = D["macro"]
     sd, st, st7 = P.lastv(m["date"], m["stables_b"], 7)
     fd, fg, fg7 = P.lastv(m["date"], m["fg"], 7)
