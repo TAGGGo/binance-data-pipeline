@@ -29,7 +29,7 @@ if _flag.exists():
         print("run_now failed", repr(e))
 OUT = REPO / "data" / "orderbook"
 BANDS = [0.5, 1, 2, 5]
-SYMS = ["BTC", "ETH"]
+SYMS = ["BTC", "ETH", "ZEC"]
 SRC = {
     "binance": "https://data-api.binance.vision/api/v3/depth?symbol={s}USDT&limit=5000",
     "coinbase": "https://api.exchange.coinbase.com/products/{s}-USD/book?level=2",

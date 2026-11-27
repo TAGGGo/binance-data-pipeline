@@ -14,7 +14,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 OUT = REPO / "data" / "bookdepth"
-SYMS = ["BTCUSDT", "ETHUSDT"]
+SYMS = ["BTCUSDT", "ETHUSDT", "ZECUSDT"]
 FIRST = date(2023, 1, 1)
 URL = "https://data.binance.vision/data/futures/um/daily/bookDepth/{s}/{s}-bookDepth-{d}.zip"
 
